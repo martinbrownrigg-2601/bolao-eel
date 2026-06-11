@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { CalendarDays, Check, Loader2 } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
@@ -201,6 +201,16 @@ function PalpitesGrupos() {
     () => new Set(dias.filter((d) => d !== SEM_DATA)),
     [dias],
   );
+
+  // Navegação prev/next entre os dias disponíveis (na ordem de `dias`).
+  const idxAtivo = diaAtivo ? dias.indexOf(diaAtivo) : -1;
+  const temAnterior = idxAtivo > 0;
+  const temProximo = idxAtivo >= 0 && idxAtivo < dias.length - 1;
+  const irParaDia = (delta: number) => {
+    if (idxAtivo < 0) return;
+    const alvo = dias[idxAtivo + delta];
+    if (alvo) setDiaAtivo(alvo);
+  };
   const listaDoDia = diaAtivo ? (partidasPorDia.get(diaAtivo) ?? []) : [];
 
   if (loading) {
@@ -274,29 +284,51 @@ function PalpitesGrupos() {
           </div>
 
           {modo === "data" && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-secondary/50">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                  {diaAtivo && diaAtivo !== SEM_DATA
-                    ? rotuloDia(diaAtivo)
-                    : diaAtivo === SEM_DATA
-                      ? "Data a definir"
-                      : "Escolher dia"}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : undefined}
-                  onSelect={(d) => d && setDiaAtivo(diaDeDate(d))}
-                  defaultMonth={
-                    diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : new Date()
-                  }
-                  disabled={(d) => !diasComJogo.has(diaDeDate(d))}
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => irParaDia(-1)}
+                disabled={!temAnterior}
+                aria-label="Dia anterior"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary/50 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-secondary/50">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    {diaAtivo && diaAtivo !== SEM_DATA
+                      ? rotuloDia(diaAtivo)
+                      : diaAtivo === SEM_DATA
+                        ? "Data a definir"
+                        : "Escolher dia"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : undefined}
+                    onSelect={(d) => d && setDiaAtivo(diaDeDate(d))}
+                    defaultMonth={
+                      diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : new Date()
+                    }
+                    disabled={(d) => !diasComJogo.has(diaDeDate(d))}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <button
+                type="button"
+                onClick={() => irParaDia(1)}
+                disabled={!temProximo}
+                aria-label="Próximo dia"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary/50 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </div>
       )}
