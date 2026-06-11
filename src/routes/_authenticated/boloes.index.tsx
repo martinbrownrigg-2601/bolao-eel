@@ -81,8 +81,14 @@ function BoloesIndex() {
         .single();
       if (error) throw error;
       router.navigate({ to: "/boloes/$id", params: { id: data.id } });
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao criar bolão");
+    } catch (e: unknown) {
+      if (e && typeof e === "object" && "message" in e) {
+        setErro((e as { message: string }).message);
+      } else if (e instanceof Error) {
+        setErro(e.message);
+      } else {
+        setErro("Erro ao criar bolão");
+      }
     } finally {
       setCriando(false);
     }
