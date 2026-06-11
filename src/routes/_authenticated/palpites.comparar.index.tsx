@@ -6,6 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 import { Flag } from "@/components/Flag";
+import { useBolao } from "@/contexts/BolaoContext";
 
 export const Route = createFileRoute("/_authenticated/palpites/comparar/")({
   head: () => ({
@@ -74,6 +75,7 @@ function jaIniciada(p: Partida): boolean {
 const SEM_DATA = "sem-data";
 
 function CompararIndex() {
+  const { bolaoAtivo } = useBolao();
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
   const [loading, setLoading] = useState(true);
@@ -251,7 +253,9 @@ function CompararIndex() {
       <header>
         <h1 className="text-3xl font-bold">Comparar palpites</h1>
         <p className="mt-1 text-muted-foreground">
-          Depois que um jogo começa, veja o que cada membro do seu bolão palpitou.
+          {bolaoAtivo
+            ? `Palpites dos membros de "${bolaoAtivo.nome}" nos jogos já iniciados.`
+            : "Depois que um jogo começa, veja o que cada membro do seu bolão palpitou."}
         </p>
       </header>
 

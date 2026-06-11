@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/lib/supabase";
 import { AppShell } from "@/components/AppShell";
+import { BolaoProvider } from "@/contexts/BolaoContext";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -11,8 +12,10 @@ export const Route = createFileRoute("/_authenticated")({
     }
   },
   component: () => (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <BolaoProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </BolaoProvider>
   ),
 });

@@ -2,7 +2,16 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target, Users, Shield, Trophy, Eye } from "lucide-react";
+import { LogOut, Home, Target, Users, Shield, Trophy, Eye, ChevronDown, Check } from "lucide-react";
+import { useBolao } from "@/contexts/BolaoContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const baseNav = [
   { to: "/" as const, label: "Início", icon: Home, exact: true },
@@ -15,6 +24,7 @@ const baseNav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
+  const { boloes, bolaoAtivo, setBolaoAtivo } = useBolao();
 
   useEffect(() => {
     let active = true;
@@ -49,12 +59,47 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link to="/">
             <BrandLogo size="sm" />
           </Link>
-          <button
-            onClick={handleSignOut}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
-          >
-            <LogOut className="h-3.5 w-3.5" /> Sair
-          </button>
+          <div className="flex items-center gap-2">
+            {boloes.length > 1 && bolaoAtivo && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary max-w-[180px]">
+                    <Users className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span className="truncate">{bolaoAtivo.nome}</span>
+                    <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Visualizando bolão
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {boloes.map((b) => (
+                    <DropdownMenuItem
+                      key={b.id}
+                      onClick={() => setBolaoAtivo(b)}
+                      className="flex items-center justify-between gap-2 cursor-pointer"
+                    >
+                      <span className="truncate">{b.nome}</span>
+                      {b.id === bolaoAtivo.id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {boloes.length === 1 && bolaoAtivo && (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-muted-foreground max-w-[180px]">
+                <Users className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">{bolaoAtivo.nome}</span>
+              </span>
+            )}
+            <button
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Sair
+            </button>
+          </div>
         </div>
         <nav className="mx-auto max-w-6xl overflow-x-auto px-4 pb-2">
           <ul className="flex gap-1">

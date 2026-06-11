@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Trophy, Radio } from "lucide-react";
+import { useBolao } from "@/contexts/BolaoContext";
 
 export const Route = createFileRoute("/_authenticated/ranking")({
   head: () => ({
-    meta: [{ title: "Ranking geral | BolãoEEL" }],
+    meta: [{ title: "Ranking | BolãoEEL" }],
   }),
   component: RankingPage,
 });
@@ -19,6 +20,7 @@ type Linha = {
 };
 
 function RankingPage() {
+  const { bolaoAtivo, loading: loadingBolao } = useBolao();
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [meuId, setMeuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,23 +28,38 @@ function RankingPage() {
   const [aoVivo, setAoVivo] = useState(false);
   const [piscando, setPiscando] = useState(false);
 
-  async function carregar() {
+  async function carregar(bolaoId: string | null) {
     try {
       const { data: u } = await supabase.auth.getUser();
       setMeuId(u.user?.id ?? null);
 
-      const { data: pts, error } = await supabase
+      let ids: string[] | null = null;
+      if (bolaoId) {
+        const { data: ms } = await supabase
+          .from("membros_bolao")
+          .select("usuario_id")
+          .eq("bolao_id", bolaoId);
+        ids = (ms ?? []).map((m: { usuario_id: string }) => m.usuario_id);
+      }
+
+      let query = supabase
         .from("v_pontuacao_usuario")
         .select("usuario_id,pontos_total,jogos_pontuados,palpites_total");
+
+      if (ids && ids.length > 0) {
+        query = query.in("usuario_id", ids);
+      }
+
+      const { data: pts, error } = await query;
       if (error) throw error;
 
-      const ids = (pts ?? []).map((p) => (p as { usuario_id: string }).usuario_id);
+      const ptIds = (pts ?? []).map((p) => (p as { usuario_id: string }).usuario_id);
       let perfisMap: Record<string, { nome_usuario: string; nome_exibicao: string | null }> = {};
-      if (ids.length > 0) {
+      if (ptIds.length > 0) {
         const { data: ps } = await supabase
           .from("perfis")
           .select("id,nome_usuario,nome_exibicao")
-          .in("id", ids);
+          .in("id", ptIds);
         (ps ?? []).forEach((p) => {
           const row = p as { id: string; nome_usuario: string; nome_exibicao: string | null };
           perfisMap[row.id] = { nome_usuario: row.nome_usuario, nome_exibicao: row.nome_exibicao };
@@ -79,7 +96,13 @@ function RankingPage() {
   }
 
   useEffect(() => {
-    void carregar();
+    if (loadingBolao) return;
+    setLoading(true);
+    void carregar(bolaoAtivo?.id ?? null);
+  }, [bolaoAtivo?.id, loadingBolao]);
+
+  useEffect(() => {
+    if (loadingBolao) return;
 
     const ch = supabase
       .channel("ranking-live")
@@ -89,13 +112,13 @@ function RankingPage() {
         () => {
           setPiscando(true);
           setTimeout(() => setPiscando(false), 800);
-          void carregar();
+          void carregar(bolaoAtivo?.id ?? null);
         },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "partidas" },
-        () => void carregar(),
+        () => void carregar(bolaoAtivo?.id ?? null),
       )
       .subscribe((status) => {
         setAoVivo(status === "SUBSCRIBED");
@@ -104,9 +127,9 @@ function RankingPage() {
     return () => {
       void supabase.removeChannel(ch);
     };
-  }, []);
+  }, [bolaoAtivo?.id, loadingBolao]);
 
-  if (loading) {
+  if (loading || loadingBolao) {
     return (
       <div className="grid place-items-center py-20 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
@@ -118,9 +141,11 @@ function RankingPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Ranking geral</h1>
+          <h1 className="text-3xl font-bold">Ranking</h1>
           <p className="mt-1 text-muted-foreground">
-            Soma de pontos de todos os palpites já julgados.
+            {bolaoAtivo
+              ? `Pontuação dos membros de "${bolaoAtivo.nome}".`
+              : "Você ainda não participa de nenhum bolão."}
           </p>
         </div>
         <div
@@ -141,7 +166,11 @@ function RankingPage() {
         </div>
       )}
 
-      {linhas.length === 0 ? (
+      {!bolaoAtivo ? (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+          Entre em um bolão para ver o ranking dos seus amigos.
+        </div>
+      ) : linhas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
           Ainda ninguém pontuou. Assim que o admin lançar os primeiros resultados, o ranking aparece aqui.
         </div>

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { FASE_LABEL } from "@/lib/fases";
 import { Flag } from "@/components/Flag";
+import { useBolao } from "@/contexts/BolaoContext";
 
 export const Route = createFileRoute("/_authenticated/palpites/comparar/$id")({
   head: () => ({
@@ -31,8 +32,6 @@ type PalpiteOutro = {
   pontos_ganhos: number | null;
 };
 
-// Mesma regra do servidor: a partida ainda aceita palpite?
-// Enquanto aceitar, NÃO mostramos palpites de terceiros (a RLS também bloqueia).
 function aindaAberta(p: Partida): boolean {
   if (p.status !== "aguardando") return false;
   if (p.data_hora && new Date(p.data_hora) <= new Date()) return false;
@@ -41,6 +40,7 @@ function aindaAberta(p: Partida): boolean {
 
 function CompararPalpites() {
   const { id } = Route.useParams();
+  const { bolaoAtivo, loading: loadingBolao } = useBolao();
   const [partida, setPartida] = useState<Partida | null>(null);
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
   const [palpites, setPalpites] = useState<PalpiteOutro[]>([]);
@@ -50,6 +50,7 @@ function CompararPalpites() {
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
+    if (loadingBolao) return;
     (async () => {
       try {
         const [{ data: u }, { data: part, error: ePart }, { data: sels }] = await Promise.all([
@@ -65,13 +66,25 @@ function CompararPalpites() {
         setSelecoes(selMap);
         setPartida(part as Partida);
 
-        // Só busca palpites se a partida já fechou. A RLS já garante isso,
-        // mas evitamos a query (e a tela "vazia") quando ainda está aberta.
         if (part && !aindaAberta(part as Partida)) {
-          const { data: pls, error: ePls } = await supabase
+          let query = supabase
             .from("palpites")
             .select("usuario_id,gols_mandante,gols_visitante,pontos_ganhos")
             .eq("partida_id", id);
+
+          // Filtrar pelos membros do bolão ativo
+          if (bolaoAtivo) {
+            const { data: ms } = await supabase
+              .from("membros_bolao")
+              .select("usuario_id")
+              .eq("bolao_id", bolaoAtivo.id);
+            const memberIds = (ms ?? []).map((m: { usuario_id: string }) => m.usuario_id);
+            if (memberIds.length > 0) {
+              query = query.in("usuario_id", memberIds);
+            }
+          }
+
+          const { data: pls, error: ePls } = await query;
           if (ePls) throw ePls;
           const lista = (pls ?? []) as PalpiteOutro[];
           setPalpites(lista);
@@ -96,7 +109,7 @@ function CompararPalpites() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, bolaoAtivo?.id, loadingBolao]);
 
   const ordenados = useMemo(
     () =>
@@ -108,7 +121,7 @@ function CompararPalpites() {
     [palpites, meuId],
   );
 
-  if (loading) {
+  if (loading || loadingBolao) {
     return (
       <div className="grid place-items-center py-20 text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
@@ -147,6 +160,11 @@ function CompararPalpites() {
         <div className="text-xs text-muted-foreground">
           {FASE_LABEL[partida.fase] ?? partida.fase}
           {partida.grupo ? ` · Grupo ${partida.grupo}` : ""} · {dataLabel}
+          {bolaoAtivo && (
+            <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+              {bolaoAtivo.nome}
+            </span>
+          )}
         </div>
         <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="flex items-center justify-end gap-2 text-right">
@@ -175,7 +193,9 @@ function CompararPalpites() {
         </div>
       ) : ordenados.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
-          Ninguém do seu bolão palpitou nesta partida.
+          {bolaoAtivo
+            ? `Ninguém de "${bolaoAtivo.nome}" palpitou nesta partida.`
+            : "Ninguém do seu bolão palpitou nesta partida."}
         </div>
       ) : (
         <ul className="grid gap-2">
@@ -228,11 +248,11 @@ function CompararPalpites() {
 function VoltarLink() {
   return (
     <Link
-      to="/palpites/grupos"
+      to="/palpites/comparar"
       className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
     >
       <ArrowLeft className="h-4 w-4" />
-      Voltar aos palpites
+      Voltar à comparação
     </Link>
   );
 }
