@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Check, Loader2, ShieldAlert } from "lucide-react";
+import { Check, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react";
+import { FASES_TODAS, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -16,6 +17,7 @@ type Partida = {
   fase: string;
   grupo: string | null;
   data_hora: string | null;
+  estadio: string | null;
   status: "aguardando" | "em_andamento" | "finalizada";
   mandante_id: string;
   visitante_id: string;
@@ -29,7 +31,10 @@ function AdminPage() {
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<"todas" | "aguardando" | "em_andamento" | "finalizada">("todas");
+  const [filtro, setFiltro] = useState<"todas" | "aguardando" | "em_andamento" | "finalizada">(
+    "todas",
+  );
+  const [faseAtiva, setFaseAtiva] = useState<string | null>(null);
 
   async function carregar() {
     setLoading(true);
@@ -67,9 +72,25 @@ function AdminPage() {
     void carregar();
   }, []);
 
+  // Fases que têm ao menos uma partida, em ordem oficial.
+  const fasesDisponiveis = useMemo(
+    () => ordenarFases([...new Set(partidas.map((p) => p.fase))]),
+    [partidas],
+  );
+
+  // Seleciona a primeira fase assim que as partidas carregam.
+  useEffect(() => {
+    if (faseAtiva === null && fasesDisponiveis.length > 0) setFaseAtiva(fasesDisponiveis[0]);
+  }, [fasesDisponiveis, faseAtiva]);
+
   const filtradas = useMemo(
-    () => (filtro === "todas" ? partidas : partidas.filter((p) => p.status === filtro)),
-    [partidas, filtro],
+    () =>
+      partidas.filter(
+        (p) =>
+          (faseAtiva === null || p.fase === faseAtiva) &&
+          (filtro === "todas" || p.status === filtro),
+      ),
+    [partidas, filtro, faseAtiva],
   );
 
   if (loading) {
@@ -111,7 +132,13 @@ function AdminPage() {
                 filtro === f ? "bg-primary text-primary-foreground" : "hover:bg-secondary/60"
               }`}
             >
-              {f === "todas" ? "Todas" : f === "em_andamento" ? "Em andamento" : f === "aguardando" ? "Aguardando" : "Finalizadas"}
+              {f === "todas"
+                ? "Todas"
+                : f === "em_andamento"
+                  ? "Em andamento"
+                  : f === "aguardando"
+                    ? "Aguardando"
+                    : "Finalizadas"}
             </button>
           ))}
         </div>
@@ -123,6 +150,29 @@ function AdminPage() {
         </div>
       )}
 
+      <CriarPartida
+        selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
+        onCriada={() => void carregar()}
+      />
+
+      {fasesDisponiveis.length > 0 && (
+        <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-border pb-px">
+          {fasesDisponiveis.map((fase) => (
+            <button
+              key={fase}
+              onClick={() => setFaseAtiva(fase)}
+              className={`whitespace-nowrap rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
+                faseAtiva === fase
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {FASE_LABEL_CURTO[fase] ?? fase}
+            </button>
+          ))}
+        </nav>
+      )}
+
       <ul className="grid gap-2">
         {filtradas.map((p) => (
           <PartidaAdminRow
@@ -130,7 +180,9 @@ function AdminPage() {
             partida={p}
             mandante={selecoes[p.mandante_id]}
             visitante={selecoes[p.visitante_id]}
+            selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
             onUpdated={(np) => setPartidas((prev) => prev.map((x) => (x.id === np.id ? np : x)))}
+            onReload={() => void carregar()}
           />
         ))}
         {filtradas.length === 0 && (
@@ -147,19 +199,64 @@ function PartidaAdminRow({
   partida,
   mandante,
   visitante,
+  selecoes,
   onUpdated,
+  onReload,
 }: {
   partida: Partida;
   mandante?: Selecao;
   visitante?: Selecao;
+  selecoes: Selecao[];
   onUpdated: (p: Partida) => void;
+  onReload: () => void;
 }) {
-  const [gm, setGm] = useState<string>(partida.gols_mandante != null ? String(partida.gols_mandante) : "");
-  const [gv, setGv] = useState<string>(partida.gols_visitante != null ? String(partida.gols_visitante) : "");
+  const [gm, setGm] = useState<string>(
+    partida.gols_mandante != null ? String(partida.gols_mandante) : "",
+  );
+  const [gv, setGv] = useState<string>(
+    partida.gols_visitante != null ? String(partida.gols_visitante) : "",
+  );
   const [status, setStatus] = useState<Partida["status"]>(partida.status);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Edição dos dados da partida (times/fase/grupo/data/estádio) e exclusão.
+  const [editando, setEditando] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    fase: partida.fase,
+    grupo: partida.grupo ?? "",
+    mandante: mandante?.codigo ?? "",
+    visitante: visitante?.codigo ?? "",
+    dataHora: isoParaLocalInput(partida.data_hora),
+    estadio: partida.estadio ?? "",
+  });
+
+  async function salvarEdicao() {
+    setErro(null);
+    setSaving(true);
+    const msg = await salvarPartida(form, partida.id);
+    setSaving(false);
+    if (msg) {
+      setErro(msg);
+      return;
+    }
+    setEditando(false);
+    onReload();
+  }
+
+  async function excluir() {
+    if (!confirm("Excluir esta partida? Os palpites associados serão removidos.")) return;
+    setErro(null);
+    setSaving(true);
+    const { error } = await supabase.rpc("admin_delete_partida", { _partida_id: partida.id });
+    setSaving(false);
+    if (error) {
+      setErro(error.message);
+      return;
+    }
+    onReload();
+  }
 
   async function salvar() {
     setErro(null);
@@ -201,7 +298,10 @@ function PartidaAdminRow({
 
   const data = partida.data_hora
     ? new Date(partida.data_hora).toLocaleString("pt-BR", {
-        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : "—";
 
@@ -209,21 +309,67 @@ function PartidaAdminRow({
     <li className="rounded-lg border border-border bg-card p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
-          {partida.fase}
+          {FASE_LABEL_CURTO[partida.fase] ?? partida.fase}
           {partida.grupo ? ` · Grupo ${partida.grupo}` : ""} · {data}
         </span>
-        <span
-          className={`rounded-full px-2 py-0.5 font-semibold ${
-            partida.status === "finalizada"
-              ? "bg-accent/20 text-accent"
-              : partida.status === "em_andamento"
-                ? "bg-primary/20 text-primary"
-                : "bg-secondary text-muted-foreground"
-          }`}
-        >
-          {partida.status}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-full px-2 py-0.5 font-semibold ${
+              partida.status === "finalizada"
+                ? "bg-accent/20 text-accent"
+                : partida.status === "em_andamento"
+                  ? "bg-primary/20 text-primary"
+                  : "bg-secondary text-muted-foreground"
+            }`}
+          >
+            {partida.status}
+          </span>
+          <button
+            onClick={() => setEditando((v) => !v)}
+            disabled={saving}
+            title="Editar dados da partida"
+            className="rounded p-1 hover:bg-secondary/60 disabled:opacity-50"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={excluir}
+            disabled={saving}
+            title="Excluir partida"
+            className="rounded p-1 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
+
+      {editando && (
+        <div className="mt-3 space-y-3 rounded-md border border-border bg-background/40 p-3">
+          <div className="text-xs font-semibold text-muted-foreground">Editar dados da partida</div>
+          <CamposPartida form={form} setForm={setForm} selecoes={selecoes} />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={salvarEdicao}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              Salvar alterações
+            </button>
+            <button
+              onClick={() => setEditando(false)}
+              disabled={saving}
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-secondary/60"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="flex items-center justify-end gap-2 text-right">
           <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
@@ -255,12 +401,222 @@ function PartidaAdminRow({
           disabled={saving}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <Check className="h-3.5 w-3.5" /> : null}
+          {saving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : saved ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : null}
           {saving ? "Salvando" : saved ? "Salvo" : "Salvar e recalcular"}
         </button>
       </div>
       {erro && <div className="mt-2 text-xs text-destructive">{erro}</div>}
     </li>
+  );
+}
+
+// Converte um ISO (UTC) para o formato aceito por <input type="datetime-local">
+// no fuso local do navegador.
+function isoParaLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
+// Campos compartilhados entre criar e editar. Controlado pelo pai.
+type FormState = {
+  fase: string;
+  grupo: string;
+  mandante: string;
+  visitante: string;
+  dataHora: string;
+  estadio: string;
+};
+
+function CamposPartida({
+  form,
+  setForm,
+  selecoes,
+}: {
+  form: FormState;
+  setForm: (f: FormState) => void;
+  selecoes: Selecao[];
+}) {
+  const up = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="text-xs font-medium">
+        Fase
+        <select
+          value={form.fase}
+          onChange={(e) => up({ fase: e.target.value })}
+          className="mt-1 h-9 w-full rounded-md border border-border bg-input/40 px-2 text-sm"
+        >
+          {FASES_TODAS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-xs font-medium">
+        Grupo {form.fase === "grupos" ? "(A–L)" : "(deixe vazio no mata-mata)"}
+        <input
+          type="text"
+          value={form.grupo}
+          maxLength={2}
+          onChange={(e) => up({ grupo: e.target.value.toUpperCase() })}
+          placeholder={form.fase === "grupos" ? "Ex.: A" : "—"}
+          className="mt-1 h-9 w-full rounded-md border border-border bg-input/40 px-2 text-sm uppercase"
+        />
+      </label>
+      <label className="text-xs font-medium">
+        Mandante
+        <SelecaoSelect
+          value={form.mandante}
+          onChange={(v) => up({ mandante: v })}
+          selecoes={selecoes}
+        />
+      </label>
+      <label className="text-xs font-medium">
+        Visitante
+        <SelecaoSelect
+          value={form.visitante}
+          onChange={(v) => up({ visitante: v })}
+          selecoes={selecoes}
+        />
+      </label>
+      <label className="text-xs font-medium">
+        Data e hora (seu horário local)
+        <input
+          type="datetime-local"
+          value={form.dataHora}
+          onChange={(e) => up({ dataHora: e.target.value })}
+          className="mt-1 h-9 w-full rounded-md border border-border bg-input/40 px-2 text-sm"
+        />
+      </label>
+      <label className="text-xs font-medium">
+        Estádio / sede (opcional)
+        <input
+          type="text"
+          value={form.estadio}
+          onChange={(e) => up({ estadio: e.target.value })}
+          placeholder="Ex.: MetLife Stadium, East Rutherford"
+          className="mt-1 h-9 w-full rounded-md border border-border bg-input/40 px-2 text-sm"
+        />
+      </label>
+    </div>
+  );
+}
+
+// Chama a RPC de upsert. Retorna mensagem de erro ou null em sucesso.
+async function salvarPartida(form: FormState, partidaId?: string): Promise<string | null> {
+  if (!form.mandante || !form.visitante) return "Escolha as duas seleções.";
+  if (form.mandante === form.visitante) return "Mandante e visitante não podem ser iguais.";
+  if (form.fase === "grupos" && !form.grupo.trim()) return "Informe o grupo (A–L).";
+  const { error } = await supabase.rpc("admin_upsert_partida", {
+    _fase: form.fase,
+    _grupo: form.fase === "grupos" ? form.grupo.trim() : null,
+    _mandante_codigo: form.mandante,
+    _visitante_codigo: form.visitante,
+    _data_hora: form.dataHora ? new Date(form.dataHora).toISOString() : null,
+    _estadio: form.estadio || null,
+    _partida_id: partidaId ?? null,
+  });
+  return error ? error.message : null;
+}
+
+const FORM_VAZIO: FormState = {
+  fase: "oitavas",
+  grupo: "",
+  mandante: "",
+  visitante: "",
+  dataHora: "",
+  estadio: "",
+};
+
+function CriarPartida({ selecoes, onCriada }: { selecoes: Selecao[]; onCriada: () => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [form, setForm] = useState<FormState>(FORM_VAZIO);
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  async function criar() {
+    setErro(null);
+    setSaving(true);
+    const msg = await salvarPartida(form);
+    setSaving(false);
+    if (msg) {
+      setErro(msg);
+      return;
+    }
+    setOk(true);
+    setForm(FORM_VAZIO);
+    onCriada();
+    setTimeout(() => setOk(false), 1500);
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        onClick={() => setAberto((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="inline-flex items-center gap-2 text-sm font-semibold">
+          <Plus className="h-4 w-4 text-primary" /> Criar partida
+        </span>
+        <span className="text-xs text-muted-foreground">{aberto ? "fechar" : "abrir"}</span>
+      </button>
+      {aberto && (
+        <div className="space-y-3 border-t border-border px-4 py-4">
+          <p className="text-xs text-muted-foreground">
+            Cadastre uma partida de qualquer fase. No mata-mata deixe o grupo vazio. Os palpites
+            abrem automaticamente e fecham no horário do jogo.
+          </p>
+          <CamposPartida form={form} setForm={setForm} selecoes={selecoes} />
+          {erro && <div className="text-xs text-destructive">{erro}</div>}
+          <button
+            onClick={criar}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : ok ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : null}
+            {saving ? "Criando" : ok ? "Criada" : "Criar partida"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SelecaoSelect({
+  value,
+  onChange,
+  selecoes,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  selecoes: Selecao[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="mt-1 h-9 w-full rounded-md border border-border bg-input/40 px-2 text-sm"
+    >
+      <option value="">— selecione —</option>
+      {selecoes.map((s) => (
+        <option key={s.id} value={s.codigo}>
+          {s.bandeira ? `${s.bandeira} ` : ""}
+          {s.nome}
+        </option>
+      ))}
+    </select>
   );
 }
 

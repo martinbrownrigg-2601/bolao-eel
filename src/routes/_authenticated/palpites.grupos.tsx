@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Check, Loader2 } from "lucide-react";
+import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 
 export const Route = createFileRoute("/_authenticated/palpites/grupos")({
   head: () => ({
@@ -25,6 +26,14 @@ type Partida = {
   gols_mandante: number | null;
   gols_visitante: number | null;
 };
+
+// Uma partida deixa de aceitar palpite quando começa (data_hora passou)
+// ou quando o admin já tirou do status "aguardando".
+function palpiteFechado(p: Partida): boolean {
+  if (p.status !== "aguardando") return true;
+  if (p.data_hora && new Date(p.data_hora) <= new Date()) return true;
+  return false;
+}
 type Palpite = {
   partida_id: string;
   gols_mandante: number;
@@ -44,11 +53,7 @@ function PalpitesGrupos() {
       try {
         const [{ data: sels }, { data: parts }, { data: u }] = await Promise.all([
           supabase.from("selecoes").select("id,nome,codigo,bandeira"),
-          supabase
-            .from("partidas")
-            .select("*")
-            .eq("fase", "grupos")
-            .order("data_hora", { ascending: true }),
+          supabase.from("partidas").select("*").order("data_hora", { ascending: true }),
           supabase.auth.getUser(),
         ]);
 
@@ -74,15 +79,34 @@ function PalpitesGrupos() {
     })();
   }, []);
 
-  const grupos = useMemo(() => {
-    const map = new Map<string, Partida[]>();
+  // Agrupa por fase; dentro da fase de grupos, subdivide por letra de grupo.
+  const fases = useMemo(() => {
+    const porFase = new Map<string, Partida[]>();
     for (const p of partidas) {
-      const g = p.grupo ?? "?";
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(p);
+      if (!porFase.has(p.fase)) porFase.set(p.fase, []);
+      porFase.get(p.fase)!.push(p);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return ordenarFases([...porFase.keys()]).map((fase) => {
+      const lista = porFase.get(fase)!;
+      // subgrupos: por letra (grupos) ou um único bloco (mata-mata)
+      const subMap = new Map<string, Partida[]>();
+      for (const p of lista) {
+        const k = fase === "grupos" ? (p.grupo ?? "?") : "_";
+        if (!subMap.has(k)) subMap.set(k, []);
+        subMap.get(k)!.push(p);
+      }
+      const sub = Array.from(subMap.entries()).sort(([a], [b]) => a.localeCompare(b));
+      return { fase, sub };
+    });
   }, [partidas]);
+
+  const [faseAtiva, setFaseAtiva] = useState<string | null>(null);
+  // Seleciona a primeira fase disponível assim que as partidas carregam.
+  useEffect(() => {
+    if (faseAtiva === null && fases.length > 0) setFaseAtiva(fases[0].fase);
+  }, [fases, faseAtiva]);
+
+  const faseSelecionada = fases.find((f) => f.fase === faseAtiva) ?? fases[0];
 
   if (loading) {
     return (
@@ -95,10 +119,11 @@ function PalpitesGrupos() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-bold">Fase de grupos</h1>
+        <h1 className="text-3xl font-bold">Palpites</h1>
         <p className="mt-1 text-muted-foreground">
           Crave o placar. <span className="text-primary font-medium">5 pts</span> pelo resultado +{" "}
-          <span className="text-accent font-medium">2 pts</span> pelo placar exato.
+          <span className="text-accent font-medium">2 pts</span> pelo placar exato. Palpites fecham
+          no início de cada jogo.
         </p>
       </header>
 
@@ -114,38 +139,67 @@ function PalpitesGrupos() {
         </div>
       )}
 
-      <div className="space-y-8">
-        {grupos.map(([grupo, lista]) => (
-          <section key={grupo}>
-            <h2 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-              <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground font-bold">
-                {grupo}
-              </span>
-              Grupo {grupo}
+      {fases.length > 0 && (
+        <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-border pb-px">
+          {fases.map(({ fase }) => (
+            <button
+              key={fase}
+              onClick={() => setFaseAtiva(fase)}
+              className={`whitespace-nowrap rounded-t-md px-3 py-2 text-sm font-medium transition-colors ${
+                faseSelecionada?.fase === fase
+                  ? "border-b-2 border-primary text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {FASE_LABEL_CURTO[fase] ?? fase}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {faseSelecionada && (
+        <div className="space-y-6">
+          {faseSelecionada.fase !== "grupos" && (
+            <h2 className="text-xl font-bold text-primary">
+              {FASE_LABEL[faseSelecionada.fase] ?? faseSelecionada.fase}
             </h2>
-            <ul className="grid gap-2">
-              {lista.map((p) => (
-                <PartidaRow
-                  key={p.id}
-                  partida={p}
-                  mandante={selecoes[p.mandante_id]}
-                  visitante={selecoes[p.visitante_id]}
-                  palpite={palpites[p.id]}
-                  onSaved={(np) =>
-                    setPalpites((prev) => ({ ...prev, [p.id]: np }))
-                  }
-                />
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+          )}
+          {faseSelecionada.sub.map(([k, lista]) => (
+            <section key={k}>
+              {faseSelecionada.fase === "grupos" ? (
+                <h3 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+                  <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-accent-foreground font-bold">
+                    {k}
+                  </span>
+                  Grupo {k}
+                </h3>
+              ) : null}
+              <ul className="grid gap-2">
+                {lista.map((p) => (
+                  <PartidaRow
+                    key={p.id}
+                    partida={p}
+                    mandante={selecoes[p.mandante_id]}
+                    visitante={selecoes[p.visitante_id]}
+                    palpite={palpites[p.id]}
+                    onSaved={(np) => setPalpites((prev) => ({ ...prev, [p.id]: np }))}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function PartidaRow({
-  partida, mandante, visitante, palpite, onSaved,
+  partida,
+  mandante,
+  visitante,
+  palpite,
+  onSaved,
 }: {
   partida: Partida;
   mandante?: Selecao;
@@ -153,7 +207,7 @@ function PartidaRow({
   palpite?: Palpite;
   onSaved: (p: Palpite) => void;
 }) {
-  const bloqueado = partida.status !== "aguardando";
+  const bloqueado = palpiteFechado(partida);
   const [gm, setGm] = useState<string>(palpite ? String(palpite.gols_mandante) : "");
   const [gv, setGv] = useState<string>(palpite ? String(palpite.gols_visitante) : "");
   const [saving, setSaving] = useState(false);
@@ -181,7 +235,7 @@ function PartidaRow({
             gols_mandante: nm,
             gols_visitante: nv,
           },
-          { onConflict: "usuario_id,partida_id" }
+          { onConflict: "usuario_id,partida_id" },
         )
         .select("partida_id,gols_mandante,gols_visitante,pontos_ganhos")
         .single();
@@ -198,7 +252,10 @@ function PartidaRow({
 
   const data = partida.data_hora
     ? new Date(partida.data_hora).toLocaleString("pt-BR", {
-        day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : "Data a definir";
 
@@ -229,7 +286,9 @@ function PartidaRow({
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
-          {bloqueado ? "Palpites encerrados para esta partida." : "Você pode editar até o início do jogo."}
+          {bloqueado
+            ? "Palpites encerrados para esta partida."
+            : "Você pode editar até o início do jogo."}
         </div>
         {!bloqueado && (
           <button
@@ -237,7 +296,11 @@ function PartidaRow({
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <Check className="h-3.5 w-3.5" /> : null}
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : saved ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : null}
             {saving ? "Salvando" : saved ? "Salvo" : palpite ? "Atualizar" : "Salvar"}
           </button>
         )}
@@ -248,8 +311,14 @@ function PartidaRow({
 }
 
 function ScoreInput({
-  value, onChange, disabled,
-}: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <input
       type="number"

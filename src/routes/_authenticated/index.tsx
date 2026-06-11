@@ -44,9 +44,7 @@ function Dashboard() {
   return (
     <div className="space-y-8">
       <section>
-        <h1 className="text-3xl font-bold">
-          Olá{nome ? `, ${nome}` : ""} 👋
-        </h1>
+        <h1 className="text-3xl font-bold">Olá{nome ? `, ${nome}` : ""} 👋</h1>
         <p className="mt-1 text-muted-foreground">
           O bolão oficial do Luka Doncic Fan Club. Hora de cravar os placares.
         </p>
@@ -63,9 +61,9 @@ function Dashboard() {
           className="group block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/60 hover:bg-card/80"
         >
           <Target className="h-6 w-6 text-primary transition-transform group-hover:scale-110" />
-          <div className="mt-3 font-semibold">Palpitar fase de grupos</div>
+          <div className="mt-3 font-semibold">Palpitar jogos</div>
           <div className="mt-1 text-sm text-muted-foreground">
-            Crave os placares dos 48 jogos da primeira fase.
+            Crave os placares da fase de grupos e do mata-mata.
           </div>
         </Link>
       </section>
@@ -74,8 +72,16 @@ function Dashboard() {
 }
 
 function Stat({
-  label, value, icon: Icon, accent,
-}: { label: string; value: number; icon: React.ElementType; accent?: boolean }) {
+  label,
+  value,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  accent?: boolean;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
