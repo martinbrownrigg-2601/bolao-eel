@@ -2,15 +2,12 @@ import { Link, useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target, Trophy, Users, ListChecks } from "lucide-react";
+import { LogOut, Home, Target } from "lucide-react";
 
 const nav = [
-  { to: "/", label: "Início", icon: Home },
-  { to: "/palpites/grupos", label: "Palpites — Grupos", icon: Target },
-  { to: "/meus-palpites", label: "Meus palpites", icon: ListChecks },
-  { to: "/classificacao", label: "Classificação", icon: Trophy },
-  { to: "/bolao", label: "Bolão", icon: Users },
-] as const;
+  { to: "/" as const, label: "Início", icon: Home, exact: true },
+  { to: "/palpites/grupos" as const, label: "Palpites — Grupos", icon: Target, exact: false },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -40,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <li key={item.to}>
                 <Link
                   to={item.to}
-                  activeOptions={{ exact: item.to === "/" }}
+                  activeOptions={{ exact: item.exact }}
                   className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground data-[status=active]:bg-primary/15 data-[status=active]:text-primary"
                 >
                   <item.icon className="h-4 w-4" />

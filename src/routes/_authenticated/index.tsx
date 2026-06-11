@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Target, Trophy, Users, ListChecks } from "lucide-react";
+import { Target, Trophy, ListChecks } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
@@ -33,7 +33,10 @@ function Dashboard() {
         .select("pontos_ganhos")
         .eq("usuario_id", u.user.id);
       const total = palpites?.length ?? 0;
-      const pts = (palpites ?? []).reduce((s, p) => s + (p.pontos_ganhos ?? 0), 0);
+      const pts = (palpites ?? []).reduce(
+        (s: number, p: { pontos_ganhos: number | null }) => s + (p.pontos_ganhos ?? 0),
+        0,
+      );
       setStats({ palpites: total, pontos: pts });
     })();
   }, []);
@@ -54,19 +57,17 @@ function Dashboard() {
         <Stat label="Pontos acumulados" value={stats.pontos} icon={Trophy} accent />
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        <Action
+      <section>
+        <Link
           to="/palpites/grupos"
-          icon={Target}
-          title="Palpitar fase de grupos"
-          desc="Crave os placares dos 48 jogos da primeira fase."
-        />
-        <Action
-          to="/bolao"
-          icon={Users}
-          title="Entrar ou criar um bolão"
-          desc="Dispute com os amigos do clube usando um código de convite."
-        />
+          className="group block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/60 hover:bg-card/80"
+        >
+          <Target className="h-6 w-6 text-primary transition-transform group-hover:scale-110" />
+          <div className="mt-3 font-semibold">Palpitar fase de grupos</div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Crave os placares dos 48 jogos da primeira fase.
+          </div>
+        </Link>
       </section>
     </div>
   );
@@ -83,20 +84,5 @@ function Stat({
       </div>
       <div className={`mt-2 text-3xl font-bold ${accent ? "text-accent" : ""}`}>{value}</div>
     </div>
-  );
-}
-
-function Action({
-  to, icon: Icon, title, desc,
-}: { to: string; icon: React.ElementType; title: string; desc: string }) {
-  return (
-    <Link
-      to={to}
-      className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/60 hover:bg-card/80"
-    >
-      <Icon className="h-6 w-6 text-primary transition-transform group-hover:scale-110" />
-      <div className="mt-3 font-semibold">{title}</div>
-      <div className="mt-1 text-sm text-muted-foreground">{desc}</div>
-    </Link>
   );
 }
