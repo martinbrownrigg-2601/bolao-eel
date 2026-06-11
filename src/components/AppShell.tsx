@@ -2,11 +2,12 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target, Users, Shield } from "lucide-react";
+import { LogOut, Home, Target, Users, Shield, Trophy } from "lucide-react";
 
 const baseNav = [
   { to: "/" as const, label: "Início", icon: Home, exact: true },
   { to: "/palpites/grupos" as const, label: "Palpites", icon: Target, exact: false },
+  { to: "/ranking" as const, label: "Ranking", icon: Trophy, exact: false },
   { to: "/boloes" as const, label: "Bolões", icon: Users, exact: false },
 ];
 
