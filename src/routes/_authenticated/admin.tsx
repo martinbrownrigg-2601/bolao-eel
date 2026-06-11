@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Check, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react";
+import { Flag } from "@/components/Flag";
 import { FASES_TODAS, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -373,7 +374,7 @@ function PartidaAdminRow({
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="flex items-center justify-end gap-2 text-right">
           <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
-          <span className="text-xl">{mandante?.bandeira ?? "🏳️"}</span>
+          <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={18} />
         </div>
         <div className="flex items-center gap-2">
           <ScoreInput value={gm} onChange={setGm} disabled={saving} />
@@ -381,7 +382,7 @@ function PartidaAdminRow({
           <ScoreInput value={gv} onChange={setGv} disabled={saving} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xl">{visitante?.bandeira ?? "🏳️"}</span>
+          <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={18} />
           <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
         </div>
       </div>

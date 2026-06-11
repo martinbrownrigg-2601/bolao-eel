@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { FASE_LABEL_CURTO } from "@/lib/fases";
+import { Flag } from "@/components/Flag";
 
 export const Route = createFileRoute("/_authenticated/palpites/comparar/")({
   head: () => ({
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/palpites/comparar/")({
   component: CompararIndex,
 });
 
-type Selecao = { id: string; nome: string; bandeira: string | null };
+type Selecao = { id: string; nome: string; codigo: string; bandeira: string | null };
 type Partida = {
   id: string;
   fase: string;
@@ -44,7 +45,7 @@ function CompararIndex() {
     (async () => {
       try {
         const [{ data: sels }, { data: parts, error }] = await Promise.all([
-          supabase.from("selecoes").select("id,nome,bandeira"),
+          supabase.from("selecoes").select("id,nome,codigo,bandeira"),
           supabase.from("partidas").select("*").order("data_hora", { ascending: false }),
         ]);
         if (error) throw error;
@@ -121,11 +122,11 @@ function CompararIndex() {
                       {p.grupo ? ` · Grupo ${p.grupo}` : ""} · {data}
                     </div>
                     <div className="mt-1 flex items-center gap-2 font-medium">
-                      <span className="text-lg">{m?.bandeira ?? "🏳️"}</span>
+                      <Flag codigo={m?.codigo} bandeira={m?.bandeira} size={16} />
                       <span className="truncate">{m?.nome ?? "—"}</span>
                       <span className="text-muted-foreground">{placar}</span>
                       <span className="truncate">{v?.nome ?? "—"}</span>
-                      <span className="text-lg">{v?.bandeira ?? "🏳️"}</span>
+                      <Flag codigo={v?.codigo} bandeira={v?.bandeira} size={16} />
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

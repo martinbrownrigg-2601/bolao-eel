@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { FASE_LABEL } from "@/lib/fases";
+import { Flag } from "@/components/Flag";
 
 export const Route = createFileRoute("/_authenticated/palpites/comparar/$id")({
   head: () => ({
@@ -150,7 +151,7 @@ function CompararPalpites() {
         <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="flex items-center justify-end gap-2 text-right">
             <span className="font-semibold truncate">{mandante?.nome ?? "—"}</span>
-            <span className="text-2xl">{mandante?.bandeira ?? "🏳️"}</span>
+            <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={26} />
           </div>
           <div className="text-center text-2xl font-bold">
             {partida.gols_mandante != null && partida.gols_visitante != null
@@ -158,7 +159,7 @@ function CompararPalpites() {
               : "× "}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{visitante?.bandeira ?? "🏳️"}</span>
+            <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={26} />
             <span className="font-semibold truncate">{visitante?.nome ?? "—"}</span>
           </div>
         </div>

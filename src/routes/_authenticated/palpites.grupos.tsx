@@ -5,6 +5,7 @@ import { CalendarDays, Check, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
+import { Flag } from "@/components/Flag";
 
 type Modo = "data" | "fase";
 
@@ -448,7 +449,7 @@ function PartidaRow({
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="flex items-center justify-end gap-2 text-right">
           <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
-          <span className="text-xl">{mandante?.bandeira ?? "🏳️"}</span>
+          <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={18} />
         </div>
         <div className="flex items-center gap-2">
           <ScoreInput value={gm} onChange={setGm} disabled={bloqueado || saving} />
@@ -456,7 +457,7 @@ function PartidaRow({
           <ScoreInput value={gv} onChange={setGv} disabled={bloqueado || saving} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xl">{visitante?.bandeira ?? "🏳️"}</span>
+          <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={18} />
           <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
         </div>
       </div>
