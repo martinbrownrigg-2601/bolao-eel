@@ -2,11 +2,12 @@ import { Link, useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target } from "lucide-react";
+import { LogOut, Home, Target, Users } from "lucide-react";
 
 const nav = [
   { to: "/" as const, label: "Início", icon: Home, exact: true },
-  { to: "/palpites/grupos" as const, label: "Palpites — Grupos", icon: Target, exact: false },
+  { to: "/palpites/grupos" as const, label: "Palpites", icon: Target, exact: false },
+  { to: "/boloes" as const, label: "Bolões", icon: Users, exact: false },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
