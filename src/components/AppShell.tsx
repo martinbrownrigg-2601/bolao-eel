@@ -1,0 +1,54 @@
+import { Link, useRouter } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { BrandLogo } from "./BrandLogo";
+import { supabase } from "@/lib/supabase";
+import { LogOut, Home, Target } from "lucide-react";
+
+const nav = [
+  { to: "/" as const, label: "Início", icon: Home, exact: true },
+  { to: "/palpites/grupos" as const, label: "Palpites — Grupos", icon: Target, exact: false },
+];
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.navigate({ to: "/auth", replace: true });
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <Link to="/">
+            <BrandLogo size="sm" />
+          </Link>
+          <button
+            onClick={handleSignOut}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <LogOut className="h-3.5 w-3.5" /> Sair
+          </button>
+        </div>
+        <nav className="mx-auto max-w-6xl overflow-x-auto px-4 pb-2">
+          <ul className="flex gap-1">
+            {nav.map((item) => (
+              <li key={item.to}>
+                <Link
+                  to={item.to}
+                  activeOptions={{ exact: item.exact }}
+                  className="inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground data-[status=active]:bg-primary/15 data-[status=active]:text-primary"
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+    </div>
+  );
+}
