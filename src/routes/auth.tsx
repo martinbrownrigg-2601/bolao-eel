@@ -5,6 +5,9 @@ import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Entrar — BolãoEEL" },
@@ -16,42 +19,53 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const router = useRouter();
+  const { redirect } = Route.useSearch();
+  // Só aceita caminhos internos — evita open redirect via ?redirect=https://...
+  const destino = redirect && redirect.startsWith("/") ? redirect : "/";
+
+  function irParaApp() {
+    router.navigate({ to: destino, replace: true });
+  }
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [nomeUsuario, setNomeUsuario] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.navigate({ to: "/", replace: true });
+      if (data.session) irParaApp();
     });
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
-    setInfo(null);
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password: senha,
-          options: {
-            data: { nome_usuario: nomeUsuario },
-            emailRedirectTo: window.location.origin,
-          },
+          options: { data: { nome_usuario: nomeUsuario } },
         });
         if (error) throw error;
-        setInfo("Conta criada! Verifique seu e-mail para confirmar (se exigido) e depois faça login.");
-        setMode("login");
+        // Sem confirmação de e-mail, o signUp já devolve uma sessão ativa —
+        // entra direto. Se por algum motivo não vier sessão, faz o login.
+        if (!data.session) {
+          const { error: e2 } = await supabase.auth.signInWithPassword({
+            email,
+            password: senha,
+          });
+          if (e2) throw e2;
+        }
+        irParaApp();
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
-        router.navigate({ to: "/", replace: true });
+        irParaApp();
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
@@ -115,11 +129,6 @@ function AuthPage() {
                 {erro}
               </div>
             )}
-            {info && (
-              <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm">
-                {info}
-              </div>
-            )}
 
             <button
               type="submit"
@@ -136,7 +145,7 @@ function AuthPage() {
                 Não tem conta?{" "}
                 <button
                   className="font-medium text-accent hover:underline"
-                  onClick={() => { setMode("signup"); setErro(null); setInfo(null); }}
+                  onClick={() => { setMode("signup"); setErro(null); }}
                 >
                   Cadastre-se
                 </button>
@@ -146,7 +155,7 @@ function AuthPage() {
                 Já tem conta?{" "}
                 <button
                   className="font-medium text-accent hover:underline"
-                  onClick={() => { setMode("login"); setErro(null); setInfo(null); }}
+                  onClick={() => { setMode("login"); setErro(null); }}
                 >
                   Entrar
                 </button>

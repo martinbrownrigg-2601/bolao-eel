@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { mensagemErro } from "@/lib/utils";
 import { Loader2, Copy, Check, Users, Trophy, ArrowLeft, LogOut, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/boloes/$id")({
@@ -78,7 +79,7 @@ function BolaoDetalhe() {
           setRanking(r);
         }
       } catch (e) {
-        setErro(e instanceof Error ? e.message : "Erro ao carregar bolão");
+        setErro(mensagemErro(e, "Erro ao carregar bolão"));
       } finally {
         setLoading(false);
       }
@@ -108,7 +109,7 @@ function BolaoDetalhe() {
       if (error) throw error;
       router.navigate({ to: "/boloes" });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao sair do bolão");
+      setErro(mensagemErro(e, "Erro ao sair do bolão"));
       setSaindo(false);
     }
   }
@@ -123,7 +124,7 @@ function BolaoDetalhe() {
       if (error) throw error;
       router.navigate({ to: "/boloes" });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao excluir bolão");
+      setErro(mensagemErro(e, "Erro ao excluir bolão"));
       setSaindo(false);
     }
   }

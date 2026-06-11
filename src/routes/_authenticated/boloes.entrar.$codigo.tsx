@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { mensagemErro } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/boloes/entrar/$codigo")({
@@ -20,7 +21,7 @@ function EntrarBolao() {
         if (error) throw error;
         router.navigate({ to: "/boloes/$id", params: { id: data as string }, replace: true });
       } catch (e) {
-        setErro(e instanceof Error ? e.message : "Não foi possível entrar no bolão.");
+        setErro(mensagemErro(e, "Não foi possível entrar no bolão."));
       }
     })();
   }, [codigo, router]);

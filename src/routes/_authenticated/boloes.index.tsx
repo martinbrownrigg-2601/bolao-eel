@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { mensagemErro } from "@/lib/utils";
 import { Loader2, Plus, Users, LogIn } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/boloes/")({
@@ -106,7 +107,7 @@ function BoloesIndex() {
       if (error) throw error;
       router.navigate({ to: "/boloes/$id", params: { id: data as string } });
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "Erro ao entrar");
+      setErro(mensagemErro(e, "Erro ao entrar"));
     } finally {
       setEntrando(false);
     }

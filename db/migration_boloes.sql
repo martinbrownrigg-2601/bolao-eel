@@ -35,13 +35,13 @@ begin
   if v_uid is null then
     raise exception 'Você precisa estar logado.' using errcode = '28000';
   end if;
-  select id into v_bolao_id from public.boloes where upper(codigo_convite) = upper(_codigo);
+  select b.id into v_bolao_id from public.boloes b where upper(b.codigo_convite) = upper(_codigo);
   if v_bolao_id is null then
     raise exception 'Código de convite inválido.' using errcode = 'P0002';
   end if;
   insert into public.membros_bolao (bolao_id, usuario_id)
-  values (v_bolao_id, v_uid)
-  on conflict do nothing;
+  select v_bolao_id, v_uid
+  on conflict (bolao_id, usuario_id) do nothing;
   return v_bolao_id;
 end; $$;
 
