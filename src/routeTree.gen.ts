@@ -19,6 +19,8 @@ import { Route as AuthenticatedBoloesIndexRouteImport } from './routes/_authenti
 import { Route as ApiPublicSbConfigDotjsRouteImport } from './routes/api/public/sb-config[.]js'
 import { Route as AuthenticatedPalpitesGruposRouteImport } from './routes/_authenticated/palpites.grupos'
 import { Route as AuthenticatedBoloesIdRouteImport } from './routes/_authenticated/boloes.$id'
+import { Route as AuthenticatedPalpitesCompararIndexRouteImport } from './routes/_authenticated/palpites.comparar.index'
+import { Route as AuthenticatedPalpitesCompararIdRouteImport } from './routes/_authenticated/palpites.comparar.$id'
 import { Route as AuthenticatedBoloesEntrarCodigoRouteImport } from './routes/_authenticated/boloes.entrar.$codigo'
 
 const AuthRoute = AuthRouteImport.update({
@@ -72,6 +74,18 @@ const AuthenticatedBoloesIdRoute = AuthenticatedBoloesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AuthenticatedBoloesRoute,
 } as any)
+const AuthenticatedPalpitesCompararIndexRoute =
+  AuthenticatedPalpitesCompararIndexRouteImport.update({
+    id: '/palpites/comparar/',
+    path: '/palpites/comparar/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPalpitesCompararIdRoute =
+  AuthenticatedPalpitesCompararIdRouteImport.update({
+    id: '/palpites/comparar/$id',
+    path: '/palpites/comparar/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedBoloesEntrarCodigoRoute =
   AuthenticatedBoloesEntrarCodigoRouteImport.update({
     id: '/entrar/$codigo',
@@ -90,6 +104,8 @@ export interface FileRoutesByFullPath {
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
   '/boloes/': typeof AuthenticatedBoloesIndexRoute
   '/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
+  '/palpites/comparar/$id': typeof AuthenticatedPalpitesCompararIdRoute
+  '/palpites/comparar/': typeof AuthenticatedPalpitesCompararIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
@@ -101,6 +117,8 @@ export interface FileRoutesByTo {
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
   '/boloes': typeof AuthenticatedBoloesIndexRoute
   '/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
+  '/palpites/comparar/$id': typeof AuthenticatedPalpitesCompararIdRoute
+  '/palpites/comparar': typeof AuthenticatedPalpitesCompararIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,6 +133,8 @@ export interface FileRoutesById {
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
   '/_authenticated/boloes/': typeof AuthenticatedBoloesIndexRoute
   '/_authenticated/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
+  '/_authenticated/palpites/comparar/$id': typeof AuthenticatedPalpitesCompararIdRoute
+  '/_authenticated/palpites/comparar/': typeof AuthenticatedPalpitesCompararIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -129,6 +149,8 @@ export interface FileRouteTypes {
     | '/api/public/sb-config.js'
     | '/boloes/'
     | '/boloes/entrar/$codigo'
+    | '/palpites/comparar/$id'
+    | '/palpites/comparar/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -140,6 +162,8 @@ export interface FileRouteTypes {
     | '/api/public/sb-config.js'
     | '/boloes'
     | '/boloes/entrar/$codigo'
+    | '/palpites/comparar/$id'
+    | '/palpites/comparar'
   id:
     | '__root__'
     | '/_authenticated'
@@ -153,6 +177,8 @@ export interface FileRouteTypes {
     | '/api/public/sb-config.js'
     | '/_authenticated/boloes/'
     | '/_authenticated/boloes/entrar/$codigo'
+    | '/_authenticated/palpites/comparar/$id'
+    | '/_authenticated/palpites/comparar/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -233,6 +259,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBoloesIdRouteImport
       parentRoute: typeof AuthenticatedBoloesRoute
     }
+    '/_authenticated/palpites/comparar/': {
+      id: '/_authenticated/palpites/comparar/'
+      path: '/palpites/comparar'
+      fullPath: '/palpites/comparar/'
+      preLoaderRoute: typeof AuthenticatedPalpitesCompararIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/palpites/comparar/$id': {
+      id: '/_authenticated/palpites/comparar/$id'
+      path: '/palpites/comparar/$id'
+      fullPath: '/palpites/comparar/$id'
+      preLoaderRoute: typeof AuthenticatedPalpitesCompararIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/boloes/entrar/$codigo': {
       id: '/_authenticated/boloes/entrar/$codigo'
       path: '/entrar/$codigo'
@@ -264,6 +304,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedPalpitesGruposRoute: typeof AuthenticatedPalpitesGruposRoute
+  AuthenticatedPalpitesCompararIdRoute: typeof AuthenticatedPalpitesCompararIdRoute
+  AuthenticatedPalpitesCompararIndexRoute: typeof AuthenticatedPalpitesCompararIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -272,6 +314,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedPalpitesGruposRoute: AuthenticatedPalpitesGruposRoute,
+  AuthenticatedPalpitesCompararIdRoute: AuthenticatedPalpitesCompararIdRoute,
+  AuthenticatedPalpitesCompararIndexRoute:
+    AuthenticatedPalpitesCompararIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

@@ -1,8 +1,48 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Check, Loader2 } from "lucide-react";
+import { CalendarDays, Check, Loader2 } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
+
+type Modo = "data" | "fase";
+
+// Chave de dia no fuso LOCAL (não UTC) — "YYYY-MM-DD".
+function diaLocal(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function hojeLocal(): string {
+  return diaLocal(new Date().toISOString());
+}
+
+// "YYYY-MM-DD" <-> Date (meia-noite local), para o calendário.
+function dateDeDia(dia: string): Date {
+  const [y, m, d] = dia.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function diaDeDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+// Rótulo amigável de um dia "YYYY-MM-DD".
+function rotuloDia(dia: string): string {
+  const [y, m, d] = dia.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
 
 export const Route = createFileRoute("/_authenticated/palpites/grupos")({
   head: () => ({
@@ -79,7 +119,7 @@ function PalpitesGrupos() {
     })();
   }, []);
 
-  // Agrupa por fase; dentro da fase de grupos, subdivide por letra de grupo.
+  // ---- Agrupamento por FASE (dentro de grupos, subdivide por letra) ----
   const fases = useMemo(() => {
     const porFase = new Map<string, Partida[]>();
     for (const p of partidas) {
@@ -108,6 +148,60 @@ function PalpitesGrupos() {
 
   const faseSelecionada = fases.find((f) => f.fase === faseAtiva) ?? fases[0];
 
+  // ---- Agrupamento por DATA (dias com partida, ordenados) ----
+  // Partidas sem data_hora ("a definir") ficam num balde próprio.
+  const SEM_DATA = "sem-data";
+  const dias = useMemo(() => {
+    const set = new Set<string>();
+    let temSemData = false;
+    for (const p of partidas) {
+      if (p.data_hora) set.add(diaLocal(p.data_hora));
+      else temSemData = true;
+    }
+    const ordenados = [...set].sort();
+    if (temSemData) ordenados.push(SEM_DATA);
+    return ordenados;
+  }, [partidas]);
+
+  const partidasPorDia = useMemo(() => {
+    const m = new Map<string, Partida[]>();
+    for (const p of partidas) {
+      const k = p.data_hora ? diaLocal(p.data_hora) : SEM_DATA;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(p);
+    }
+    // dentro do dia, ordena por horário
+    for (const lista of m.values()) {
+      lista.sort((a, b) => (a.data_hora ?? "").localeCompare(b.data_hora ?? ""));
+    }
+    return m;
+  }, [partidas]);
+
+  // ---- Modo de visualização + dia ativo ----
+  const [modo, setModo] = useState<Modo>("data");
+  const [diaAtivo, setDiaAtivo] = useState<string | null>(null);
+
+  // Default: dia de HOJE; se não houver jogo hoje, o próximo dia futuro;
+  // se não houver futuro, o último dia disponível.
+  useEffect(() => {
+    if (diaAtivo !== null || dias.length === 0) return;
+    const hoje = hojeLocal();
+    const reais = dias.filter((d) => d !== SEM_DATA);
+    const alvo =
+      reais.find((d) => d === hoje) ??
+      reais.find((d) => d > hoje) ??
+      reais[reais.length - 1] ??
+      dias[0];
+    setDiaAtivo(alvo);
+  }, [dias, diaAtivo]);
+
+  // Dias reais (com jogo) para habilitar no calendário — exclui o balde "sem data".
+  const diasComJogo = useMemo(
+    () => new Set(dias.filter((d) => d !== SEM_DATA)),
+    [dias],
+  );
+  const listaDoDia = diaAtivo ? (partidasPorDia.get(diaAtivo) ?? []) : [];
+
   if (loading) {
     return (
       <div className="grid place-items-center py-20 text-muted-foreground">
@@ -115,6 +209,26 @@ function PalpitesGrupos() {
       </div>
     );
   }
+
+  const renderRow = (p: Partida, mostrarGrupo: boolean) => (
+    <PartidaRow
+      key={p.id}
+      partida={p}
+      mandante={selecoes[p.mandante_id]}
+      visitante={selecoes[p.visitante_id]}
+      palpite={palpites[p.id]}
+      grupoLabel={
+        mostrarGrupo
+          ? p.fase === "grupos"
+            ? p.grupo
+              ? `Grupo ${p.grupo}`
+              : null
+            : (FASE_LABEL_CURTO[p.fase] ?? p.fase)
+          : null
+      }
+      onSaved={(np) => setPalpites((prev) => ({ ...prev, [p.id]: np }))}
+    />
+  );
 
   return (
     <div className="space-y-8">
@@ -139,7 +253,71 @@ function PalpitesGrupos() {
         </div>
       )}
 
-      {fases.length > 0 && (
+      {/* Linha única de controles: toggle + (no modo data) picker de calendário */}
+      {partidas.length > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {(["data", "fase"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setModo(m)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  modo === m
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "data" ? "Data" : "Fase"}
+              </button>
+            ))}
+          </div>
+
+          {modo === "data" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-secondary/50">
+                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                  {diaAtivo && diaAtivo !== SEM_DATA
+                    ? rotuloDia(diaAtivo)
+                    : diaAtivo === SEM_DATA
+                      ? "Data a definir"
+                      : "Escolher dia"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : undefined}
+                  onSelect={(d) => d && setDiaAtivo(diaDeDate(d))}
+                  defaultMonth={
+                    diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : new Date()
+                  }
+                  disabled={(d) => !diasComJogo.has(diaDeDate(d))}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+      )}
+
+      {/* ---------------- Modo DATA ---------------- */}
+      {modo === "data" && diaAtivo && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            {diaAtivo === SEM_DATA ? "Data a definir" : rotuloDia(diaAtivo)}
+          </h3>
+          {listaDoDia.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+              Nenhum jogo neste dia.
+            </div>
+          ) : (
+            <ul className="grid gap-2">{listaDoDia.map((p) => renderRow(p, true))}</ul>
+          )}
+        </section>
+      )}
+
+      {/* ---------------- Modo FASE ---------------- */}
+      {modo === "fase" && fases.length > 0 && (
         <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-border pb-px">
           {fases.map(({ fase }) => (
             <button
@@ -157,7 +335,7 @@ function PalpitesGrupos() {
         </nav>
       )}
 
-      {faseSelecionada && (
+      {modo === "fase" && faseSelecionada && (
         <div className="space-y-6">
           {faseSelecionada.fase !== "grupos" && (
             <h2 className="text-xl font-bold text-primary">
@@ -174,18 +352,7 @@ function PalpitesGrupos() {
                   Grupo {k}
                 </h3>
               ) : null}
-              <ul className="grid gap-2">
-                {lista.map((p) => (
-                  <PartidaRow
-                    key={p.id}
-                    partida={p}
-                    mandante={selecoes[p.mandante_id]}
-                    visitante={selecoes[p.visitante_id]}
-                    palpite={palpites[p.id]}
-                    onSaved={(np) => setPalpites((prev) => ({ ...prev, [p.id]: np }))}
-                  />
-                ))}
-              </ul>
+              <ul className="grid gap-2">{lista.map((p) => renderRow(p, false))}</ul>
             </section>
           ))}
         </div>
@@ -199,12 +366,14 @@ function PartidaRow({
   mandante,
   visitante,
   palpite,
+  grupoLabel,
   onSaved,
 }: {
   partida: Partida;
   mandante?: Selecao;
   visitante?: Selecao;
   palpite?: Palpite;
+  grupoLabel?: string | null;
   onSaved: (p: Palpite) => void;
 }) {
   const bloqueado = palpiteFechado(partida);
@@ -262,7 +431,14 @@ function PartidaRow({
   return (
     <li className="rounded-lg border border-border bg-card p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground">{data}</div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {grupoLabel && (
+            <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold uppercase tracking-wide">
+              {grupoLabel}
+            </span>
+          )}
+          <span>{data}</span>
+        </div>
         {palpite?.pontos_ganhos != null && palpite.pontos_ganhos > 0 && (
           <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
             +{palpite.pontos_ganhos} pts
@@ -286,9 +462,17 @@ function PartidaRow({
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="text-xs text-muted-foreground">
-          {bloqueado
-            ? "Palpites encerrados para esta partida."
-            : "Você pode editar até o início do jogo."}
+          {bloqueado ? (
+            <Link
+              to="/palpites/comparar/$id"
+              params={{ id: partida.id }}
+              className="font-medium text-primary hover:underline"
+            >
+              Ver palpites do bolão →
+            </Link>
+          ) : (
+            "Você pode editar até o início do jogo."
+          )}
         </div>
         {!bloqueado && (
           <button
