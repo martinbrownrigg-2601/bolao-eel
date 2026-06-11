@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedBoloesRouteImport } from './routes/_authenticated/boloes'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedBoloesIndexRouteImport } from './routes/_authenticated/boloes.index'
@@ -32,6 +33,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedBoloesRoute = AuthenticatedBoloesRouteImport.update({
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/boloes': typeof AuthenticatedBoloesRouteWithChildren
+  '/ranking': typeof AuthenticatedRankingRoute
   '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/ranking': typeof AuthenticatedRankingRoute
   '/': typeof AuthenticatedIndexRoute
   '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/boloes': typeof AuthenticatedBoloesRouteWithChildren
+  '/_authenticated/ranking': typeof AuthenticatedRankingRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/_authenticated/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/admin'
     | '/boloes'
+    | '/ranking'
     | '/boloes/$id'
     | '/palpites/grupos'
     | '/api/public/sb-config.js'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/admin'
+    | '/ranking'
     | '/'
     | '/boloes/$id'
     | '/palpites/grupos'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/admin'
     | '/_authenticated/boloes'
+    | '/_authenticated/ranking'
     | '/_authenticated/'
     | '/_authenticated/boloes/$id'
     | '/_authenticated/palpites/grupos'
@@ -170,6 +182,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/ranking': {
+      id: '/_authenticated/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof AuthenticatedRankingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/boloes': {
@@ -242,6 +261,7 @@ const AuthenticatedBoloesRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedBoloesRoute: typeof AuthenticatedBoloesRouteWithChildren
+  AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedPalpitesGruposRoute: typeof AuthenticatedPalpitesGruposRoute
 }
@@ -249,6 +269,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedBoloesRoute: AuthenticatedBoloesRouteWithChildren,
+  AuthenticatedRankingRoute: AuthenticatedRankingRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedPalpitesGruposRoute: AuthenticatedPalpitesGruposRoute,
 }
