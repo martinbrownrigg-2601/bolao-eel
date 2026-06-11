@@ -1,10 +1,10 @@
 import { Link, useRouter } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target, Users } from "lucide-react";
+import { LogOut, Home, Target, Users, Shield } from "lucide-react";
 
-const nav = [
+const baseNav = [
   { to: "/" as const, label: "Início", icon: Home, exact: true },
   { to: "/palpites/grupos" as const, label: "Palpites", icon: Target, exact: false },
   { to: "/boloes" as const, label: "Bolões", icon: Users, exact: false },
@@ -12,6 +12,28 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      const { data } = await supabase
+        .from("perfis")
+        .select("is_admin")
+        .eq("id", u.user.id)
+        .maybeSingle();
+      if (active) setIsAdmin(!!data?.is_admin);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const nav = isAdmin
+    ? [...baseNav, { to: "/admin" as const, label: "Admin", icon: Shield, exact: false }]
+    : baseNav;
 
   async function handleSignOut() {
     await supabase.auth.signOut();
