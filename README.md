@@ -4,7 +4,11 @@
 
 ## Setup do Supabase externo
 
-1. No painel do seu projeto Supabase, abra **SQL Editor** e cole/execute o arquivo [`db/migration_inicial.sql`](./db/migration_inicial.sql). É idempotente (pode rodar mais de uma vez).
+1. No painel do seu projeto Supabase, abra **SQL Editor** e cole/execute, em ordem:
+   1. [`db/migration_inicial.sql`](./db/migration_inicial.sql)
+   2. [`db/migration_boloes.sql`](./db/migration_boloes.sql) — adiciona convites, RPC `entrar_bolao_por_codigo` e ranking.
+
+   Ambos são idempotentes (podem rodar mais de uma vez).
 2. Em **Authentication → Providers**, garanta que **Email** está habilitado. Se quiser pular a confirmação por e-mail durante o desenvolvimento, desabilite **Confirm email**.
 3. Para liberar o primeiro admin, rode no SQL Editor depois de cadastrar sua conta:
    ```sql
