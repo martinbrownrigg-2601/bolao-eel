@@ -12,8 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedBoloesRouteImport } from './routes/_authenticated/boloes'
+import { Route as AuthenticatedBoloesIndexRouteImport } from './routes/_authenticated/boloes.index'
 import { Route as ApiPublicSbConfigDotjsRouteImport } from './routes/api/public/sb-config[.]js'
 import { Route as AuthenticatedPalpitesGruposRouteImport } from './routes/_authenticated/palpites.grupos'
+import { Route as AuthenticatedBoloesIdRouteImport } from './routes/_authenticated/boloes.$id'
+import { Route as AuthenticatedBoloesEntrarCodigoRouteImport } from './routes/_authenticated/boloes.entrar.$codigo'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -29,6 +33,17 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBoloesRoute = AuthenticatedBoloesRouteImport.update({
+  id: '/boloes',
+  path: '/boloes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBoloesIndexRoute =
+  AuthenticatedBoloesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedBoloesRoute,
+  } as any)
 const ApiPublicSbConfigDotjsRoute = ApiPublicSbConfigDotjsRouteImport.update({
   id: '/api/public/sb-config.js',
   path: '/api/public/sb-config.js',
@@ -40,39 +55,80 @@ const AuthenticatedPalpitesGruposRoute =
     path: '/palpites/grupos',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBoloesIdRoute = AuthenticatedBoloesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedBoloesRoute,
+} as any)
+const AuthenticatedBoloesEntrarCodigoRoute =
+  AuthenticatedBoloesEntrarCodigoRouteImport.update({
+    id: '/entrar/$codigo',
+    path: '/entrar/$codigo',
+    getParentRoute: () => AuthenticatedBoloesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/boloes': typeof AuthenticatedBoloesRouteWithChildren
+  '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
+  '/boloes/': typeof AuthenticatedBoloesIndexRoute
+  '/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/': typeof AuthenticatedIndexRoute
+  '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
+  '/boloes': typeof AuthenticatedBoloesIndexRoute
+  '/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/boloes': typeof AuthenticatedBoloesRouteWithChildren
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/_authenticated/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
+  '/_authenticated/boloes/': typeof AuthenticatedBoloesIndexRoute
+  '/_authenticated/boloes/entrar/$codigo': typeof AuthenticatedBoloesEntrarCodigoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/palpites/grupos' | '/api/public/sb-config.js'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/boloes'
+    | '/boloes/$id'
+    | '/palpites/grupos'
+    | '/api/public/sb-config.js'
+    | '/boloes/'
+    | '/boloes/entrar/$codigo'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/' | '/palpites/grupos' | '/api/public/sb-config.js'
+  to:
+    | '/auth'
+    | '/'
+    | '/boloes/$id'
+    | '/palpites/grupos'
+    | '/api/public/sb-config.js'
+    | '/boloes'
+    | '/boloes/entrar/$codigo'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/boloes'
     | '/_authenticated/'
+    | '/_authenticated/boloes/$id'
     | '/_authenticated/palpites/grupos'
     | '/api/public/sb-config.js'
+    | '/_authenticated/boloes/'
+    | '/_authenticated/boloes/entrar/$codigo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,6 +160,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/boloes': {
+      id: '/_authenticated/boloes'
+      path: '/boloes'
+      fullPath: '/boloes'
+      preLoaderRoute: typeof AuthenticatedBoloesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/boloes/': {
+      id: '/_authenticated/boloes/'
+      path: '/'
+      fullPath: '/boloes/'
+      preLoaderRoute: typeof AuthenticatedBoloesIndexRouteImport
+      parentRoute: typeof AuthenticatedBoloesRoute
+    }
     '/api/public/sb-config.js': {
       id: '/api/public/sb-config.js'
       path: '/api/public/sb-config.js'
@@ -118,15 +188,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPalpitesGruposRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/boloes/$id': {
+      id: '/_authenticated/boloes/$id'
+      path: '/$id'
+      fullPath: '/boloes/$id'
+      preLoaderRoute: typeof AuthenticatedBoloesIdRouteImport
+      parentRoute: typeof AuthenticatedBoloesRoute
+    }
+    '/_authenticated/boloes/entrar/$codigo': {
+      id: '/_authenticated/boloes/entrar/$codigo'
+      path: '/entrar/$codigo'
+      fullPath: '/boloes/entrar/$codigo'
+      preLoaderRoute: typeof AuthenticatedBoloesEntrarCodigoRouteImport
+      parentRoute: typeof AuthenticatedBoloesRoute
+    }
   }
 }
 
+interface AuthenticatedBoloesRouteChildren {
+  AuthenticatedBoloesIdRoute: typeof AuthenticatedBoloesIdRoute
+  AuthenticatedBoloesIndexRoute: typeof AuthenticatedBoloesIndexRoute
+  AuthenticatedBoloesEntrarCodigoRoute: typeof AuthenticatedBoloesEntrarCodigoRoute
+}
+
+const AuthenticatedBoloesRouteChildren: AuthenticatedBoloesRouteChildren = {
+  AuthenticatedBoloesIdRoute: AuthenticatedBoloesIdRoute,
+  AuthenticatedBoloesIndexRoute: AuthenticatedBoloesIndexRoute,
+  AuthenticatedBoloesEntrarCodigoRoute: AuthenticatedBoloesEntrarCodigoRoute,
+}
+
+const AuthenticatedBoloesRouteWithChildren =
+  AuthenticatedBoloesRoute._addFileChildren(AuthenticatedBoloesRouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBoloesRoute: typeof AuthenticatedBoloesRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedPalpitesGruposRoute: typeof AuthenticatedPalpitesGruposRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBoloesRoute: AuthenticatedBoloesRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedPalpitesGruposRoute: AuthenticatedPalpitesGruposRoute,
 }
@@ -142,3 +243,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
