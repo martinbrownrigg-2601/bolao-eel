@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Trophy, Radio } from "lucide-react";
 import { useBolao } from "@/contexts/BolaoContext";
+import WizardsImage from "../../images/Washington-Wizards-logo.png";
 
 export const Route = createFileRoute("/_authenticated/ranking")({
   head: () => ({
@@ -197,18 +198,27 @@ function RankingPage() {
                   >
                     {i === 0 ? <Trophy className="h-4 w-4" /> : i + 1}
                   </span>
-                  <div>
-                    <div className="font-medium">
-                      {r.nome}
-                      {sou && (
-                        <span className="ml-2 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
-                          você
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium">{r.nome}</div>
+                        {sou && (
+                          <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                            você
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {r.jogos} pontuado(s) · {r.palpites} palpite(s)
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {r.jogos} pontuado(s) · {r.palpites} palpite(s)
-                    </div>
+                    {i === linhas.length - 1 && (
+                      <img
+                        src={WizardsImage}
+                        alt="Ícone de ranking"
+                        className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border"
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="text-lg font-bold text-primary">
