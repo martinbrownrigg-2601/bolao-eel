@@ -16,7 +16,6 @@ type PalpiteExtraComMembro = {
   artilheiro_id: string | null;
   campeao_id: string | null;
   pontos_ganhos: number | null;
-  perfis: { nome_display: string } | { nome_display: string }[] | null;
 };
 
 export const Route = createFileRoute("/_authenticated/palpites/comparar/")({
@@ -91,6 +90,7 @@ function CompararIndex() {
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
   const [jogadores, setJogadores] = useState<Record<string, Jogador>>({});
   const [palpitesExtras, setPalpitesExtras] = useState<PalpiteExtraComMembro[]>([]);
+  const [nomesExtras, setNomesExtras] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -114,11 +114,27 @@ function CompararIndex() {
         setJogadores(jogMap);
 
         if (extrasVisiveis && bolaoAtivo) {
-          const { data: pe } = await supabase
+          const { data: pe, error: ePe } = await supabase
             .from("palpites_extras")
-            .select("usuario_id,artilheiro_id,campeao_id,pontos_ganhos,perfis(nome_display)")
+            .select("usuario_id,artilheiro_id,campeao_id,pontos_ganhos")
             .eq("bolao_id", bolaoAtivo.id);
-          setPalpitesExtras((pe ?? []) as PalpiteExtraComMembro[]);
+          if (ePe) throw ePe;
+          const extras = (pe ?? []) as PalpiteExtraComMembro[];
+          setPalpitesExtras(extras);
+
+          const ids = [...new Set(extras.map((e) => e.usuario_id))];
+          if (ids.length > 0) {
+            const { data: ps } = await supabase
+              .from("perfis")
+              .select("id,nome_usuario,nome_exibicao")
+              .in("id", ids);
+            const nm: Record<string, string> = {};
+            (ps ?? []).forEach((p) => {
+              const r = p as { id: string; nome_usuario: string; nome_exibicao: string | null };
+              nm[r.id] = r.nome_exibicao || r.nome_usuario || "Jogador";
+            });
+            setNomesExtras(nm);
+          }
         }
       } catch (e) {
         setErro(e instanceof Error ? e.message : "Erro ao carregar partidas");
@@ -319,9 +335,7 @@ function CompararIndex() {
                       return (
                         <tr key={pe.usuario_id} className="py-1">
                           <td className="py-2 pr-4 font-medium">
-                            {Array.isArray(pe.perfis)
-                              ? (pe.perfis[0]?.nome_display ?? "—")
-                              : (pe.perfis?.nome_display ?? "—")}
+                            {nomesExtras[pe.usuario_id] ?? "—"}
                           </td>
                           <td className="py-2 pr-4 text-muted-foreground">
                             {jog ? (
