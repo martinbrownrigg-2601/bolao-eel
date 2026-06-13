@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Check, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react";
 import { Flag } from "@/components/Flag";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASES_TODAS, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -151,6 +152,10 @@ function AdminPage() {
         </div>
       )}
 
+      <ResultadoExtrasAdmin
+        selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
+      />
+
       <CriarPartida
         selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
         onCriada={() => void carregar()}
@@ -192,6 +197,279 @@ function AdminPage() {
           </li>
         )}
       </ul>
+    </div>
+  );
+}
+
+function AdminSelecaoDropdown({
+  value,
+  onChange,
+  selecoes,
+  placeholder,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  selecoes: Selecao[];
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const sel = selecoes.find((s) => s.id === value);
+  const filtradas = busca
+    ? selecoes.filter((s) => s.nome.toLowerCase().includes(busca.toLowerCase()))
+    : selecoes;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-input/40 px-2 text-sm text-left hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
+          {sel ? (
+            <>
+              <Flag codigo={sel.codigo} bandeira={sel.bandeira} size={16} />
+              <span className="flex-1 truncate">{sel.nome}</span>
+            </>
+          ) : (
+            <span className="flex-1 text-muted-foreground">{placeholder}</span>
+          )}
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <div className="border-b border-border px-2 py-1.5">
+          <input
+            autoFocus
+            placeholder="Buscar seleção..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+        <ul className="max-h-60 overflow-y-auto py-1">
+          <li>
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false); setBusca(""); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
+            >
+              — nenhuma —
+            </button>
+          </li>
+          {filtradas.map((s) => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onClick={() => { onChange(s.id); setOpen(false); setBusca(""); }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${s.id === value ? "bg-primary/10 font-medium" : ""}`}
+              >
+                <Flag codigo={s.codigo} bandeira={s.bandeira} size={16} />
+                {s.nome}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AdminJogadorDropdown({
+  artilheiroId,
+  onChangeArtilheiro,
+  selMap,
+  jogadores,
+  selecoesList,
+}: {
+  artilheiroId: string;
+  onChangeArtilheiro: (id: string) => void;
+  selMap: Record<string, Selecao>;
+  jogadores: { id: string; nome: string; selecao_id: string }[];
+  selecoesList: Selecao[];
+}) {
+  const jogadorSel = jogadores.find((j) => j.id === artilheiroId);
+  const [selFiltroId, setSelFiltroId] = useState(jogadorSel?.selecao_id ?? "");
+
+  useEffect(() => {
+    if (jogadorSel) setSelFiltroId(jogadorSel.selecao_id);
+  }, [jogadorSel]);
+
+  const jogadoresDaSel = useMemo(
+    () =>
+      selFiltroId
+        ? jogadores.filter((j) => j.selecao_id === selFiltroId).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        : [],
+    [jogadores, selFiltroId],
+  );
+
+  const selFiltro = selMap[selFiltroId];
+  const [openJog, setOpenJog] = useState(false);
+  const [buscaJog, setBuscaJog] = useState("");
+  const jogFiltrados = buscaJog
+    ? jogadoresDaSel.filter((j) => j.nome.toLowerCase().includes(buscaJog.toLowerCase()))
+    : jogadoresDaSel;
+
+  return (
+    <div className="flex gap-2">
+      <div className="flex-1">
+        <AdminSelecaoDropdown
+          value={selFiltroId}
+          onChange={(id) => { setSelFiltroId(id); onChangeArtilheiro(""); }}
+          selecoes={selecoesList}
+          placeholder="Seleção..."
+        />
+      </div>
+      <div className="flex-1">
+        <Popover open={openJog} onOpenChange={setOpenJog}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={!selFiltroId}
+              className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-input/40 px-2 text-sm text-left hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-40"
+            >
+              {jogadorSel ? (
+                <>
+                  {selFiltro && <Flag codigo={selFiltro.codigo} bandeira={selFiltro.bandeira} size={14} />}
+                  <span className="flex-1 truncate">{jogadorSel.nome}</span>
+                </>
+              ) : (
+                <span className="flex-1 text-muted-foreground">{selFiltroId ? "Jogador..." : "—"}</span>
+              )}
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90 text-muted-foreground" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-0" align="start">
+            <div className="border-b border-border px-2 py-1.5">
+              <input
+                autoFocus
+                placeholder="Buscar jogador..."
+                value={buscaJog}
+                onChange={(e) => setBuscaJog(e.target.value)}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <ul className="max-h-60 overflow-y-auto py-1">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => { onChangeArtilheiro(""); setOpenJog(false); setBuscaJog(""); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
+                >
+                  — nenhum —
+                </button>
+              </li>
+              {jogFiltrados.map((j) => (
+                <li key={j.id}>
+                  <button
+                    type="button"
+                    onClick={() => { onChangeArtilheiro(j.id); setOpenJog(false); setBuscaJog(""); }}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${j.id === artilheiroId ? "bg-primary/10 font-medium" : ""}`}
+                  >
+                    {j.nome}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+}
+
+function ResultadoExtrasAdmin({ selecoes }: { selecoes: Selecao[] }) {
+  type Jogador = { id: string; nome: string; selecao_id: string };
+  const [jogadores, setJogadores] = useState<Jogador[]>([]);
+  const [artilheiroId, setArtilheiroId] = useState("");
+  const [campeaoId, setCampeaoId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [aberto, setAberto] = useState(false);
+
+  const selMap = useMemo(() => {
+    const m: Record<string, Selecao> = {};
+    selecoes.forEach((s) => (m[s.id] = s));
+    return m;
+  }, [selecoes]);
+
+  useEffect(() => {
+    if (!aberto || jogadores.length > 0) return;
+    supabase.from("jogadores").select("id,nome,selecao_id").order("nome").then(({ data }) => {
+      setJogadores((data ?? []) as Jogador[]);
+    });
+  }, [aberto, jogadores.length]);
+
+  async function calcular() {
+    if (!artilheiroId || !campeaoId) {
+      setErro("Selecione artilheiro e seleção campeã.");
+      return;
+    }
+    setErro(null);
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc("calcular_pontos_extras", {
+        _artilheiro_real_id: artilheiroId,
+        _campeao_real_id: campeaoId,
+      });
+      if (error) throw error;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao calcular");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        onClick={() => setAberto((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+      >
+        <span>Palpites Especiais — Resultado Real</span>
+        <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${aberto ? "rotate-90" : "-rotate-90"}`} />
+      </button>
+      {aberto && (
+        <div className="border-t border-border px-4 py-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Defina o artilheiro real e a seleção campeã. Ao salvar, os pontos de todos os palpites
+            especiais são recalculados (15 pts cada).
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Artilheiro real</label>
+              <AdminJogadorDropdown
+                artilheiroId={artilheiroId}
+                onChangeArtilheiro={setArtilheiroId}
+                selMap={selMap}
+                jogadores={jogadores}
+                selecoesList={selecoes}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Seleção campeã real</label>
+              <AdminSelecaoDropdown
+                value={campeaoId}
+                onChange={setCampeaoId}
+                selecoes={selecoes}
+                placeholder="— Escolha uma seleção —"
+              />
+            </div>
+          </div>
+          {erro && <p className="text-xs text-destructive">{erro}</p>}
+          <button
+            onClick={calcular}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {saving ? "Calculando..." : saved ? "Pontos calculados!" : "Salvar e calcular pontos"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
