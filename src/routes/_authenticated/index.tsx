@@ -41,10 +41,15 @@ function Dashboard() {
     })();
   }, []);
 
+  const nomeExibicao = 
+    nome.toLowerCase() === "artur" ? "Mr. Silver" :
+    nome.toLowerCase() === "tradefox" ? "OG Anunoby" :
+    nome;
+
   return (
     <div className="space-y-8">
       <section>
-        <h1 className="text-3xl font-bold">Olá{nome ? `, ${nome}` : ""} 👋</h1>
+        <h1 className="text-3xl font-bold">Olá{nomeExibicao ? `, ${nomeExibicao}` : ""} 👋</h1>
         <p className="mt-1 text-muted-foreground">
           O bolão oficial do Luka Doncic Fan Club. Hora de cravar os placares.
         </p>
