@@ -6,6 +6,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 import { Flag } from "@/components/Flag";
+import yagoMissImage from "../../images/yago_miss.webp";
 import { useBolao } from "@/contexts/BolaoContext";
 
 type Modo = "data" | "fase";
@@ -89,6 +90,18 @@ function palpiteFechado(p: Partida): boolean {
   if (p.status !== "aguardando") return true;
   if (p.data_hora && new Date(p.data_hora) <= new Date()) return true;
   return false;
+}
+
+function tempoBloqueio(p: Partida): number | null {
+  if (p.status !== "aguardando" && p.data_hora) {
+    return new Date(p.data_hora).getTime();
+  }
+
+  if (p.data_hora) {
+    return new Date(p.data_hora).getTime();
+  }
+
+  return null;
 }
 type Palpite = {
   partida_id: string;
@@ -907,8 +920,19 @@ function PartidaRow({
       })
     : "Data a definir";
 
+  const semPontuacao = (palpite?.pontos_ganhos ?? 0) <= 0;
+  const mostraYagoAposFim = (() => {
+    if (!bloqueado || !semPontuacao) return false;
+    const bloqueadoEm = tempoBloqueio(partida);
+    if (!bloqueadoEm) return false;
+    const limiteExibicao = bloqueadoEm + 2 * 60 * 60 * 1000;
+    return Date.now() >= limiteExibicao;
+  })();
+  const mostrarYago = mostraYagoAposFim;
+
   return (
-    <li className="rounded-lg border border-border bg-card p-3 sm:p-4">
+    <li className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4">
+      <div className="flex-1">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {grupoLabel && (
@@ -940,15 +964,17 @@ function PartidaRow({
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {bloqueado ? (
-            <Link
-              to="/palpites/comparar/$id"
-              params={{ id: partida.id }}
-              className="font-medium text-primary hover:underline"
-            >
-              Ver palpites do bolão →
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/palpites/comparar/$id"
+                params={{ id: partida.id }}
+                className="font-medium text-primary hover:underline"
+              >
+                Ver palpites do bolão →
+              </Link>
+            </div>
           ) : (
             "Você pode editar até o início do jogo."
           )}
@@ -969,6 +995,16 @@ function PartidaRow({
         )}
       </div>
       {erro && <div className="mt-2 text-xs text-destructive">{erro}</div>}
+      </div>
+      {mostrarYago && (
+        <div className="flex items-center justify-center">
+          <img
+            src={yagoMissImage}
+            alt="Sem pontuação"
+            className="mt-1 h-22 w-22  shrink-0 rounded-full object-cover ring-2 ring-border shadow-sm"
+          />
+        </div>
+      )}
     </li>
   );
 }
