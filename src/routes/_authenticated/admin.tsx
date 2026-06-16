@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  RefreshCw,
   ShieldAlert,
   Plus,
   Pencil,
@@ -295,6 +296,8 @@ function AdminPage() {
           {erro}
         </div>
       )}
+
+      <SincronizarResultados />
 
       <ResultadoExtrasAdmin selecoes={selecoesList} />
 
@@ -623,6 +626,59 @@ function AdminJogadorDropdown({
           </PopoverContent>
         </Popover>
       </div>
+    </div>
+  );
+}
+
+// Dispara a sincronização automática de resultados (Edge Function "sync-resultados"
+// via RPC admin_disparar_sync). A função roda sozinha a cada ~30 min pelo cron;
+// este botão serve para forçar uma sincronização sob demanda / testar.
+function SincronizarResultados() {
+  const [rodando, setRodando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function sincronizar() {
+    setErro(null);
+    setMsg(null);
+    setRodando(true);
+    try {
+      const { error } = await supabase.rpc("admin_disparar_sync");
+      if (error) throw error;
+      // A Edge Function processa de forma assíncrona; o resultado aparece nas
+      // partidas em alguns segundos. Recarregue para ver os placares.
+      setMsg("Sincronização disparada. Os placares aparecem em instantes — recarregue a lista.");
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao sincronizar");
+    } finally {
+      setRodando(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">Sincronizar resultados (FIFA)</p>
+          <p className="text-xs text-muted-foreground">
+            Preenche placares dos jogos encerrados automaticamente. Roda sozinho a cada 30 min.
+          </p>
+        </div>
+        <button
+          onClick={sincronizar}
+          disabled={rodando}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {rodando ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          {rodando ? "Sincronizando" : "Sincronizar agora"}
+        </button>
+      </div>
+      {msg && <p className="mt-2 text-xs text-accent">{msg}</p>}
+      {erro && <p className="mt-2 text-xs text-destructive">{erro}</p>}
     </div>
   );
 }

@@ -21,6 +21,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Supabase Edge Functions secrets
+supabase/.env
+supabase/.env.*
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
