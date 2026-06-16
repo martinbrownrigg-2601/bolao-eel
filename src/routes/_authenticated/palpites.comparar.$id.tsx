@@ -31,6 +31,13 @@ type PalpiteOutro = {
   gols_visitante: number;
   pontos_ganhos: number | null;
 };
+// Placar AO VIVO (referência visual; não afeta pontuação).
+type PlacarLive = {
+  gols_mandante_live: number | null;
+  gols_visitante_live: number | null;
+  minuto: string | null;
+  ao_vivo: boolean;
+};
 
 function aindaAberta(p: Partida): boolean {
   if (p.status !== "aguardando") return false;
@@ -46,6 +53,7 @@ function CompararPalpites() {
   const [palpites, setPalpites] = useState<PalpiteOutro[]>([]);
   const [nomes, setNomes] = useState<Record<string, string>>({});
   const [meuId, setMeuId] = useState<string | null>(null);
+  const [live, setLive] = useState<PlacarLive | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -111,6 +119,30 @@ function CompararPalpites() {
     })();
   }, [id, bolaoAtivo?.id, loadingBolao]);
 
+  // Placar ao vivo desta partida: busca + polling de 45s enquanto estiver ao vivo.
+  useEffect(() => {
+    let cancelado = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    async function buscar() {
+      const { data } = await supabase
+        .from("placares_ao_vivo")
+        .select("gols_mandante_live,gols_visitante_live,minuto,ao_vivo")
+        .eq("partida_id", id)
+        .maybeSingle();
+      if (cancelado) return;
+      const l = (data as PlacarLive | null) ?? null;
+      setLive(l);
+      timer = setTimeout(buscar, l?.ao_vivo ? 45_000 : 5 * 60_000);
+    }
+    void buscar();
+
+    return () => {
+      cancelado = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [id]);
+
   const ordenados = useMemo(
     () =>
       [...palpites].sort(
@@ -143,6 +175,13 @@ function CompararPalpites() {
   const mandante = selecoes[partida.mandante_id];
   const visitante = selecoes[partida.visitante_id];
   const aberta = aindaAberta(partida);
+  // Placar oficial (final) tem prioridade; sem ele, mostra o ao vivo.
+  const temPlacarOficial = partida.gols_mandante != null && partida.gols_visitante != null;
+  const mostraLive =
+    !temPlacarOficial &&
+    live?.ao_vivo &&
+    live.gols_mandante_live != null &&
+    live.gols_visitante_live != null;
   const dataLabel = partida.data_hora
     ? new Date(partida.data_hora).toLocaleString("pt-BR", {
         day: "2-digit",
@@ -157,12 +196,20 @@ function CompararPalpites() {
       <VoltarLink />
 
       <header className="rounded-xl border border-border bg-card p-4">
-        <div className="text-xs text-muted-foreground">
-          {FASE_LABEL[partida.fase] ?? partida.fase}
-          {partida.grupo ? ` · Grupo ${partida.grupo}` : ""} · {dataLabel}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>
+            {FASE_LABEL[partida.fase] ?? partida.fase}
+            {partida.grupo ? ` · Grupo ${partida.grupo}` : ""} · {dataLabel}
+          </span>
           {bolaoAtivo && (
-            <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
               {bolaoAtivo.nome}
+            </span>
+          )}
+          {mostraLive && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 font-semibold text-red-500">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+              AO VIVO{live!.minuto ? ` · ${live!.minuto}` : ""}
             </span>
           )}
         </div>
@@ -171,10 +218,12 @@ function CompararPalpites() {
             <span className="font-semibold truncate">{mandante?.nome ?? "—"}</span>
             <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={26} />
           </div>
-          <div className="text-center text-2xl font-bold">
-            {partida.gols_mandante != null && partida.gols_visitante != null
+          <div className={`text-center text-2xl font-bold ${mostraLive ? "text-red-500" : ""}`}>
+            {temPlacarOficial
               ? `${partida.gols_mandante} × ${partida.gols_visitante}`
-              : "× "}
+              : mostraLive
+                ? `${live!.gols_mandante_live} × ${live!.gols_visitante_live}`
+                : "× "}
           </div>
           <div className="flex items-center gap-2">
             <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={26} />

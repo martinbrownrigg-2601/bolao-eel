@@ -110,11 +110,21 @@ type Palpite = {
   pontos_ganhos: number | null;
 };
 
+// Placar AO VIVO (referência visual; não afeta pontuação).
+type PlacarLive = {
+  partida_id: string;
+  gols_mandante_live: number | null;
+  gols_visitante_live: number | null;
+  minuto: string | null;
+  ao_vivo: boolean;
+};
+
 function PalpitesGrupos() {
   const { bolaoAtivo } = useBolao();
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
   const [palpites, setPalpites] = useState<Record<string, Palpite>>({});
+  const [placaresLive, setPlacaresLive] = useState<Record<string, PlacarLive>>({});
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [palpiteExtra, setPalpiteExtra] = useState<PalpiteExtra | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,6 +173,38 @@ function PalpitesGrupos() {
       }
     })();
   }, [bolaoAtivo]);
+
+  // ---- Placar AO VIVO: busca inicial + polling a cada 45s SÓ se houver jogo
+  // ao vivo (referência visual; não interfere na pontuação). ----
+  useEffect(() => {
+    let cancelado = false;
+
+    async function buscarLive(): Promise<boolean> {
+      const { data } = await supabase
+        .from("placares_ao_vivo")
+        .select("partida_id,gols_mandante_live,gols_visitante_live,minuto,ao_vivo")
+        .eq("ao_vivo", true);
+      if (cancelado) return false;
+      const m: Record<string, PlacarLive> = {};
+      (data ?? []).forEach((l) => (m[l.partida_id] = l as PlacarLive));
+      setPlacaresLive(m);
+      return (data ?? []).length > 0;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const agendar = (temLive: boolean) => {
+      if (cancelado) return;
+      // Sem jogo ao vivo: relaxa o polling (5 min) para detectar o início.
+      timer = setTimeout(loop, temLive ? 45_000 : 5 * 60_000);
+    };
+    const loop = async () => agendar(await buscarLive());
+    void loop();
+
+    return () => {
+      cancelado = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   // ---- Agrupamento por FASE (dentro de grupos, subdivide por letra) ----
   const fases = useMemo(() => {
@@ -241,10 +283,7 @@ function PalpitesGrupos() {
   }, [dias, diaAtivo]);
 
   // Dias reais (com jogo) para habilitar no calendário — exclui o balde "sem data".
-  const diasComJogo = useMemo(
-    () => new Set(dias.filter((d) => d !== SEM_DATA)),
-    [dias],
-  );
+  const diasComJogo = useMemo(() => new Set(dias.filter((d) => d !== SEM_DATA)), [dias]);
 
   // Navegação prev/next entre os dias disponíveis (na ordem de `dias`).
   const idxAtivo = diaAtivo ? dias.indexOf(diaAtivo) : -1;
@@ -272,6 +311,7 @@ function PalpitesGrupos() {
       mandante={selecoes[p.mandante_id]}
       visitante={selecoes[p.visitante_id]}
       palpite={palpites[p.id]}
+      live={placaresLive[p.id]}
       grupoLabel={
         mostrarGrupo
           ? p.fase === "grupos"
@@ -500,7 +540,11 @@ function SelecaoDropdown({
           <li>
             <button
               type="button"
-              onClick={() => { onChange(""); setOpen(false); setBusca(""); }}
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+                setBusca("");
+              }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
             >
               — nenhuma —
@@ -510,7 +554,11 @@ function SelecaoDropdown({
             <li key={s.id}>
               <button
                 type="button"
-                onClick={() => { onChange(s.id); setOpen(false); setBusca(""); }}
+                onClick={() => {
+                  onChange(s.id);
+                  setOpen(false);
+                  setBusca("");
+                }}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${s.id === value ? "bg-primary/10 font-medium" : ""}`}
               >
                 <Flag codigo={s.codigo} bandeira={s.bandeira} size={16} />
@@ -538,9 +586,7 @@ function JogadorDropdown({
 }) {
   // Passo 1: seleção escolhida para filtrar jogadores
   const jogadorSelecionado = jogadores.find((j) => j.id === artilheiroId);
-  const [selFiltroId, setSelFiltroId] = useState<string>(
-    jogadorSelecionado?.selecao_id ?? "",
-  );
+  const [selFiltroId, setSelFiltroId] = useState<string>(jogadorSelecionado?.selecao_id ?? "");
 
   // Quando o artilheiro muda externamente (ex: sincronização inicial), atualiza o filtro
   useEffect(() => {
@@ -555,7 +601,9 @@ function JogadorDropdown({
   const jogadoresDaSel = useMemo(
     () =>
       selFiltroId
-        ? jogadores.filter((j) => j.selecao_id === selFiltroId).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        ? jogadores
+            .filter((j) => j.selecao_id === selFiltroId)
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
         : [],
     [jogadores, selFiltroId],
   );
@@ -594,7 +642,9 @@ function JogadorDropdown({
             >
               {jogadorSelecionado ? (
                 <>
-                  {selFiltro && <Flag codigo={selFiltro.codigo} bandeira={selFiltro.bandeira} size={14} />}
+                  {selFiltro && (
+                    <Flag codigo={selFiltro.codigo} bandeira={selFiltro.bandeira} size={14} />
+                  )}
                   <span className="flex-1 truncate">{jogadorSelecionado.nome}</span>
                 </>
               ) : (
@@ -619,7 +669,11 @@ function JogadorDropdown({
               <li>
                 <button
                   type="button"
-                  onClick={() => { onChangeArtilheiro(""); setOpenJog(false); setBuscaJog(""); }}
+                  onClick={() => {
+                    onChangeArtilheiro("");
+                    setOpenJog(false);
+                    setBuscaJog("");
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
                 >
                   — nenhum —
@@ -629,7 +683,11 @@ function JogadorDropdown({
                 <li key={j.id}>
                   <button
                     type="button"
-                    onClick={() => { onChangeArtilheiro(j.id); setOpenJog(false); setBuscaJog(""); }}
+                    onClick={() => {
+                      onChangeArtilheiro(j.id);
+                      setOpenJog(false);
+                      setBuscaJog("");
+                    }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${j.id === artilheiroId ? "bg-primary/10 font-medium" : ""}`}
                   >
                     {j.nome}
@@ -682,12 +740,8 @@ function PalpitesExtrasCard({
   const artilheiroSel = jogadorSel ? selecoes[jogadorSel.selecao_id] : null;
 
   // Resumo para o header recolhido
-  const resumoArtilheiro = jogadorSel
-    ? jogadorSel.nome
-    : "—";
-  const resumoCampeao = campeaoSel
-    ? campeaoSel.nome
-    : "—";
+  const resumoArtilheiro = jogadorSel ? jogadorSel.nome : "—";
+  const resumoCampeao = campeaoSel ? campeaoSel.nome : "—";
 
   async function salvar() {
     setErro(null);
@@ -741,12 +795,16 @@ function PalpitesExtrasCard({
           {!expandido && (
             <span className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground truncate">
               <span className="flex items-center gap-1">
-                {artilheiroSel && <Flag codigo={artilheiroSel.codigo} bandeira={artilheiroSel.bandeira} size={13} />}
+                {artilheiroSel && (
+                  <Flag codigo={artilheiroSel.codigo} bandeira={artilheiroSel.bandeira} size={13} />
+                )}
                 {resumoArtilheiro}
               </span>
               <span>·</span>
               <span className="flex items-center gap-1">
-                {campeaoSel && <Flag codigo={campeaoSel.codigo} bandeira={campeaoSel.bandeira} size={13} />}
+                {campeaoSel && (
+                  <Flag codigo={campeaoSel.codigo} bandeira={campeaoSel.bandeira} size={13} />
+                )}
                 {resumoCampeao}
               </span>
               {palpiteExtra?.pontos_ganhos != null && (
@@ -761,7 +819,9 @@ function PalpitesExtrasCard({
           <span className="text-xs text-muted-foreground hidden sm:block">
             {aberto ? `até ${prazoStr}` : "encerrado"}
           </span>
-          <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${expandido ? "rotate-90" : "-rotate-90"}`} />
+          <ChevronRight
+            className={`h-4 w-4 text-muted-foreground transition-transform ${expandido ? "rotate-90" : "-rotate-90"}`}
+          />
         </div>
       </button>
 
@@ -773,7 +833,9 @@ function PalpitesExtrasCard({
             <div className="space-y-1.5">
               <label className="text-sm font-medium flex items-center gap-1.5">
                 <span>Artilheiro</span>
-                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">15 pts</span>
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                  15 pts
+                </span>
               </label>
               {aberto ? (
                 <JogadorDropdown
@@ -786,7 +848,13 @@ function PalpitesExtrasCard({
                 <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
                   {jogadorSel ? (
                     <>
-                      {artilheiroSel && <Flag codigo={artilheiroSel.codigo} bandeira={artilheiroSel.bandeira} size={16} />}
+                      {artilheiroSel && (
+                        <Flag
+                          codigo={artilheiroSel.codigo}
+                          bandeira={artilheiroSel.bandeira}
+                          size={16}
+                        />
+                      )}
                       <span>{jogadorSel.nome}</span>
                     </>
                   ) : (
@@ -805,7 +873,9 @@ function PalpitesExtrasCard({
             <div className="space-y-1.5">
               <label className="text-sm font-medium flex items-center gap-1.5">
                 <span>Seleção Campeã</span>
-                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">15 pts</span>
+                <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                  15 pts
+                </span>
               </label>
               {aberto ? (
                 <SelecaoDropdown
@@ -842,7 +912,11 @@ function PalpitesExtrasCard({
                 disabled={saving || (!artilheiroId && !campeaoId)}
                 className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saved ? <Check className="h-3.5 w-3.5" /> : null}
+                {saving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : saved ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : null}
                 {saving ? "Salvando" : saved ? "Salvo" : "Salvar palpites especiais"}
               </button>
             </div>
@@ -853,11 +927,26 @@ function PalpitesExtrasCard({
   );
 }
 
+// Selo "AO VIVO 1–0 · 67'" — referência visual, não influi na pontuação.
+function PlacarLiveSelo({ live }: { live?: PlacarLive }) {
+  if (!live?.ao_vivo || live.gols_mandante_live == null || live.gols_visitante_live == null) {
+    return null;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-500">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+      AO VIVO {live.gols_mandante_live}–{live.gols_visitante_live}
+      {live.minuto ? ` · ${live.minuto}` : ""}
+    </span>
+  );
+}
+
 function PartidaRow({
   partida,
   mandante,
   visitante,
   palpite,
+  live,
   grupoLabel,
   onSaved,
 }: {
@@ -865,6 +954,7 @@ function PartidaRow({
   mandante?: Selecao;
   visitante?: Selecao;
   palpite?: Palpite;
+  live?: PlacarLive;
   grupoLabel?: string | null;
   onSaved: (p: Palpite) => void;
 }) {
@@ -933,68 +1023,69 @@ function PartidaRow({
   return (
     <li className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4">
       <div className="flex-1">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {grupoLabel && (
-            <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold uppercase tracking-wide">
-              {grupoLabel}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {grupoLabel && (
+              <span className="rounded-full bg-secondary px-2 py-0.5 font-semibold uppercase tracking-wide">
+                {grupoLabel}
+              </span>
+            )}
+            <span>{data}</span>
+            <PlacarLiveSelo live={live} />
+          </div>
+          {palpite?.pontos_ganhos != null && palpite.pontos_ganhos > 0 && (
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+              +{palpite.pontos_ganhos} pts
             </span>
           )}
-          <span>{data}</span>
         </div>
-        {palpite?.pontos_ganhos != null && palpite.pontos_ganhos > 0 && (
-          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
-            +{palpite.pontos_ganhos} pts
-          </span>
-        )}
-      </div>
-      <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="flex items-center justify-end gap-2 text-right">
-          <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
-          <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={18} />
+        <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="flex items-center justify-end gap-2 text-right">
+            <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
+            <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={18} />
+          </div>
+          <div className="flex items-center gap-2">
+            <ScoreInput value={gm} onChange={setGm} disabled={bloqueado || saving} />
+            <span className="text-muted-foreground">×</span>
+            <ScoreInput value={gv} onChange={setGv} disabled={bloqueado || saving} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={18} />
+            <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ScoreInput value={gm} onChange={setGm} disabled={bloqueado || saving} />
-          <span className="text-muted-foreground">×</span>
-          <ScoreInput value={gv} onChange={setGv} disabled={bloqueado || saving} />
-        </div>
-        <div className="flex items-center gap-2">
-          <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={18} />
-          <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {bloqueado ? (
-            <div className="flex items-center gap-2">
-              <Link
-                to="/palpites/comparar/$id"
-                params={{ id: partida.id }}
-                className="font-medium text-primary hover:underline"
-              >
-                Ver palpites do bolão →
-              </Link>
-            </div>
-          ) : (
-            "Você pode editar até o início do jogo."
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {bloqueado ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/palpites/comparar/$id"
+                  params={{ id: partida.id }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Ver palpites do bolão →
+                </Link>
+              </div>
+            ) : (
+              "Você pode editar até o início do jogo."
+            )}
+          </div>
+          {!bloqueado && (
+            <button
+              onClick={salvar}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : saved ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : null}
+              {saving ? "Salvando" : saved ? "Salvo" : palpite ? "Atualizar" : "Salvar"}
+            </button>
           )}
         </div>
-        {!bloqueado && (
-          <button
-            onClick={salvar}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : saved ? (
-              <Check className="h-3.5 w-3.5" />
-            ) : null}
-            {saving ? "Salvando" : saved ? "Salvo" : palpite ? "Atualizar" : "Salvar"}
-          </button>
-        )}
-      </div>
-      {erro && <div className="mt-2 text-xs text-destructive">{erro}</div>}
+        {erro && <div className="mt-2 text-xs text-destructive">{erro}</div>}
       </div>
       {mostrarYago && (
         <div className="flex items-center justify-center">

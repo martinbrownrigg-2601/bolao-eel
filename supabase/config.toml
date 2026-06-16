@@ -412,3 +412,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # então o gateway NÃO deve exigir Authorization/JWT.
 [functions.sync-resultados]
 verify_jwt = false
+
+# sync-ao-vivo também é chamada pelo cron/admin via x-sync-secret, sem JWT.
+[functions.sync-ao-vivo]
+verify_jwt = false

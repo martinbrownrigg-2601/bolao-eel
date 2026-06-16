@@ -95,3 +95,53 @@ $$);
   jogos correspondentes retornam `no_partida` e são ignorados; assim que você criar a
   partida (fluxo manual de sempre), a próxima sync preenche.
 - **Fallback**: o preenchimento manual por partida continua funcionando normalmente.
+
+---
+
+# Placar ao vivo (referência visual)
+
+Mostra o placar PARCIAL dos jogos em andamento, **sem afetar a pontuação**. Os pontos
+continuam vindo só de `partidas`/`calcular_pontos_partida` (sync-resultados). O ao vivo
+vive numa tabela isolada e é lido apenas pela UI.
+
+## Componentes
+
+| Peça | Arquivo | O quê |
+|---|---|---|
+| Migração SQL | `db/migration_placar_ao_vivo.sql` | tabela `placares_ao_vivo` + RPC `upsert_placar_ao_vivo` (service_role) |
+| Edge Function | `supabase/functions/sync-ao-vivo/index.ts` | busca jogos ao vivo na FIFA e atualiza a tabela; sai cedo se não houver jogo |
+| UI | `palpites.grupos.tsx`, `palpites.comparar.$id.tsx` | selo "AO VIVO x–y · min'" com polling de 45s |
+
+## Passos (depois da sync-resultados já configurada)
+
+1. **Migração**: rode `db/migration_placar_ao_vivo.sql` no SQL Editor.
+2. **Deploy**: `supabase functions deploy sync-ao-vivo` (o `config.toml` já marca `verify_jwt=false`).
+   Reusa os secrets `FIFA_ID_SEASON` / `SYNC_SHARED_SECRET` — nada novo a setar.
+3. **Cron de 1 min** (SQL Editor) — a função aborta sozinha quando não há jogo ao vivo,
+   então o custo é desprezível:
+   ```sql
+   select cron.schedule('sync-ao-vivo-1min', '* * * * *', $$
+     select net.http_post(
+       url := 'https://mzklpojuftvmvjbjliom.functions.supabase.co/sync-ao-vivo',
+       headers := jsonb_build_object('Content-Type','application/json','x-sync-secret','<mesmo segredo>'),
+       body := '{}'::jsonb);
+   $$);
+   -- remover:  select cron.unschedule('sync-ao-vivo-1min');
+   ```
+
+## Como testar
+
+Durante um jogo real (ou ajuste manual de teste):
+```sql
+-- simula um jogo ao vivo sem mexer em partidas:
+select public.upsert_placar_ao_vivo(
+  '<fifa_match_id>','<home_fifa_id>','<away_fifa_id>', 1, 0, '67''', true);
+select * from public.placares_ao_vivo where ao_vivo;
+```
+Abra a lista de palpites / comparar palpites: o selo "AO VIVO 1–0 · 67'" aparece e some
+quando `ao_vivo` vira false. Confirme que `palpites.pontos_ganhos` NÃO mudou.
+
+## Garantia de isolamento
+
+`upsert_placar_ao_vivo` só escreve em `placares_ao_vivo` — nunca em `partidas`, nunca chama
+`calcular_pontos_partida`. Não há trigger. Logo, o ao vivo é puramente informativo.
