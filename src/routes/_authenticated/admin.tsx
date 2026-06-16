@@ -1,10 +1,78 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Check, ChevronRight, Loader2, ShieldAlert, Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  ShieldAlert,
+  Plus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { Flag } from "@/components/Flag";
+import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FASES_TODAS, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
+import { FASES_TODAS, FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
+
+type Modo = "data" | "fase";
+
+// Chave de dia no fuso LOCAL (não UTC) — "YYYY-MM-DD".
+function diaLocal(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function hojeLocal(): string {
+  return diaLocal(new Date().toISOString());
+}
+
+// "YYYY-MM-DD" <-> Date (meia-noite local), para o calendário.
+function dateDeDia(dia: string): Date {
+  const [y, m, d] = dia.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function diaDeDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+// Rótulo amigável de um dia "YYYY-MM-DD".
+function rotuloDia(dia: string): string {
+  const [y, m, d] = dia.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+// Status real exibido na lista admin. Deriva de placar + horário, sem depender
+// só do campo `status` cru (que costuma ficar travado em "aguardando").
+type StatusReal = "finalizada" | "em_andamento" | "aguardando";
+function statusReal(p: Partida): StatusReal {
+  // Placar lançado => partida resolvida.
+  if (p.gols_mandante != null && p.gols_visitante != null) return "finalizada";
+  // Admin já marcou como finalizada (sem placar ainda) também conta.
+  if (p.status === "finalizada") return "finalizada";
+  // Horário já passou, mas ninguém lançou placar => em andamento.
+  if (p.data_hora && new Date(p.data_hora) <= new Date()) return "em_andamento";
+  return "aguardando";
+}
+
+const STATUS_LABEL: Record<StatusReal, string> = {
+  finalizada: "Finalizada",
+  em_andamento: "Em andamento",
+  aguardando: "Aguardando",
+};
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -36,7 +104,9 @@ function AdminPage() {
   const [filtro, setFiltro] = useState<"todas" | "aguardando" | "em_andamento" | "finalizada">(
     "todas",
   );
+  const [modo, setModo] = useState<Modo>("data");
   const [faseAtiva, setFaseAtiva] = useState<string | null>(null);
+  const [diaAtivo, setDiaAtivo] = useState<string | null>(null);
 
   async function carregar() {
     setLoading(true);
@@ -74,10 +144,16 @@ function AdminPage() {
     void carregar();
   }, []);
 
-  // Fases que têm ao menos uma partida, em ordem oficial.
+  // Aplica o filtro de status (derivado) antes de qualquer agrupamento.
+  const porStatus = useMemo(
+    () => partidas.filter((p) => filtro === "todas" || statusReal(p) === filtro),
+    [partidas, filtro],
+  );
+
+  // Fases que têm ao menos uma partida (após filtro), em ordem oficial.
   const fasesDisponiveis = useMemo(
-    () => ordenarFases([...new Set(partidas.map((p) => p.fase))]),
-    [partidas],
+    () => ordenarFases([...new Set(porStatus.map((p) => p.fase))]),
+    [porStatus],
   );
 
   // Seleciona a primeira fase assim que as partidas carregam.
@@ -85,14 +161,82 @@ function AdminPage() {
     if (faseAtiva === null && fasesDisponiveis.length > 0) setFaseAtiva(fasesDisponiveis[0]);
   }, [fasesDisponiveis, faseAtiva]);
 
-  const filtradas = useMemo(
-    () =>
-      partidas.filter(
-        (p) =>
-          (faseAtiva === null || p.fase === faseAtiva) &&
-          (filtro === "todas" || p.status === filtro),
-      ),
-    [partidas, filtro, faseAtiva],
+  // ---- Agrupamento por DATA (dias com partida, ordenados) ----
+  // Partidas sem data_hora ("a definir") ficam num balde próprio.
+  const SEM_DATA = "sem-data";
+  const dias = useMemo(() => {
+    const set = new Set<string>();
+    let temSemData = false;
+    for (const p of porStatus) {
+      if (p.data_hora) set.add(diaLocal(p.data_hora));
+      else temSemData = true;
+    }
+    const ordenados = [...set].sort();
+    if (temSemData) ordenados.push(SEM_DATA);
+    return ordenados;
+  }, [porStatus]);
+
+  const partidasPorDia = useMemo(() => {
+    const m = new Map<string, Partida[]>();
+    for (const p of porStatus) {
+      const k = p.data_hora ? diaLocal(p.data_hora) : SEM_DATA;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(p);
+    }
+    for (const lista of m.values()) {
+      lista.sort((a, b) => (a.data_hora ?? "").localeCompare(b.data_hora ?? ""));
+    }
+    return m;
+  }, [porStatus]);
+
+  // Default: dia de HOJE; senão o próximo dia futuro; senão o último disponível.
+  useEffect(() => {
+    if (diaAtivo !== null || dias.length === 0) return;
+    const hoje = hojeLocal();
+    const reais = dias.filter((d) => d !== SEM_DATA);
+    const alvo =
+      reais.find((d) => d === hoje) ??
+      reais.find((d) => d > hoje) ??
+      reais[reais.length - 1] ??
+      dias[0];
+    setDiaAtivo(alvo);
+  }, [dias, diaAtivo]);
+
+  // Dias reais (com jogo) para habilitar no calendário.
+  const diasComJogo = useMemo(() => new Set(dias.filter((d) => d !== SEM_DATA)), [dias]);
+
+  // Navegação prev/next entre os dias disponíveis.
+  const idxAtivo = diaAtivo ? dias.indexOf(diaAtivo) : -1;
+  const temAnterior = idxAtivo > 0;
+  const temProximo = idxAtivo >= 0 && idxAtivo < dias.length - 1;
+  const irParaDia = (delta: number) => {
+    if (idxAtivo < 0) return;
+    const alvo = dias[idxAtivo + delta];
+    if (alvo) setDiaAtivo(alvo);
+  };
+  const listaDoDia = diaAtivo ? (partidasPorDia.get(diaAtivo) ?? []) : [];
+
+  // Modo FASE: partidas da fase ativa.
+  const filtradasFase = useMemo(
+    () => porStatus.filter((p) => faseAtiva === null || p.fase === faseAtiva),
+    [porStatus, faseAtiva],
+  );
+
+  const selecoesList = useMemo(
+    () => Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome)),
+    [selecoes],
+  );
+
+  const renderRow = (p: Partida) => (
+    <PartidaAdminRow
+      key={p.id}
+      partida={p}
+      mandante={selecoes[p.mandante_id]}
+      visitante={selecoes[p.visitante_id]}
+      selecoes={selecoesList}
+      onUpdated={(np) => setPartidas((prev) => prev.map((x) => (x.id === np.id ? np : x)))}
+      onReload={() => void carregar()}
+    />
   );
 
   if (loading) {
@@ -152,16 +296,97 @@ function AdminPage() {
         </div>
       )}
 
-      <ResultadoExtrasAdmin
-        selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
-      />
+      <ResultadoExtrasAdmin selecoes={selecoesList} />
 
-      <CriarPartida
-        selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
-        onCriada={() => void carregar()}
-      />
+      <CriarPartida selecoes={selecoesList} onCriada={() => void carregar()} />
 
-      {fasesDisponiveis.length > 0 && (
+      {/* Linha de controles: toggle Data/Fase + (no modo data) picker de calendário */}
+      {porStatus.length > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {(["data", "fase"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setModo(m)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  modo === m
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "data" ? "Data" : "Fase"}
+              </button>
+            ))}
+          </div>
+
+          {modo === "data" && (
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => irParaDia(-1)}
+                disabled={!temAnterior}
+                aria-label="Dia anterior"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary/50 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium transition-colors hover:bg-secondary/50">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    {diaAtivo && diaAtivo !== SEM_DATA
+                      ? rotuloDia(diaAtivo)
+                      : diaAtivo === SEM_DATA
+                        ? "Data a definir"
+                        : "Escolher dia"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : undefined}
+                    onSelect={(d) => d && setDiaAtivo(diaDeDate(d))}
+                    defaultMonth={
+                      diaAtivo && diaAtivo !== SEM_DATA ? dateDeDia(diaAtivo) : new Date()
+                    }
+                    disabled={(d) => !diasComJogo.has(diaDeDate(d))}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <button
+                type="button"
+                onClick={() => irParaDia(1)}
+                disabled={!temProximo}
+                aria-label="Próximo dia"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary/50 disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------------- Modo DATA ---------------- */}
+      {modo === "data" && diaAtivo && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            {diaAtivo === SEM_DATA ? "Data a definir" : rotuloDia(diaAtivo)}
+          </h3>
+          {listaDoDia.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+              Nenhuma partida nesse dia.
+            </div>
+          ) : (
+            <ul className="grid gap-2">{listaDoDia.map(renderRow)}</ul>
+          )}
+        </section>
+      )}
+
+      {/* ---------------- Modo FASE ---------------- */}
+      {modo === "fase" && fasesDisponiveis.length > 0 && (
         <nav className="-mx-1 flex gap-1 overflow-x-auto border-b border-border pb-px">
           {fasesDisponiveis.map((fase) => (
             <button
@@ -179,24 +404,23 @@ function AdminPage() {
         </nav>
       )}
 
-      <ul className="grid gap-2">
-        {filtradas.map((p) => (
-          <PartidaAdminRow
-            key={p.id}
-            partida={p}
-            mandante={selecoes[p.mandante_id]}
-            visitante={selecoes[p.visitante_id]}
-            selecoes={Object.values(selecoes).sort((a, b) => a.nome.localeCompare(b.nome))}
-            onUpdated={(np) => setPartidas((prev) => prev.map((x) => (x.id === np.id ? np : x)))}
-            onReload={() => void carregar()}
-          />
-        ))}
-        {filtradas.length === 0 && (
-          <li className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-            Nenhuma partida nesse filtro.
-          </li>
-        )}
-      </ul>
+      {modo === "fase" && (
+        <section>
+          {faseAtiva && faseAtiva !== "grupos" && (
+            <h2 className="mb-3 text-xl font-bold text-primary">
+              {FASE_LABEL[faseAtiva] ?? faseAtiva}
+            </h2>
+          )}
+          <ul className="grid gap-2">
+            {filtradasFase.map(renderRow)}
+            {filtradasFase.length === 0 && (
+              <li className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+                Nenhuma partida nesse filtro.
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
@@ -251,7 +475,11 @@ function AdminSelecaoDropdown({
           <li>
             <button
               type="button"
-              onClick={() => { onChange(""); setOpen(false); setBusca(""); }}
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+                setBusca("");
+              }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
             >
               — nenhuma —
@@ -261,7 +489,11 @@ function AdminSelecaoDropdown({
             <li key={s.id}>
               <button
                 type="button"
-                onClick={() => { onChange(s.id); setOpen(false); setBusca(""); }}
+                onClick={() => {
+                  onChange(s.id);
+                  setOpen(false);
+                  setBusca("");
+                }}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${s.id === value ? "bg-primary/10 font-medium" : ""}`}
               >
                 <Flag codigo={s.codigo} bandeira={s.bandeira} size={16} />
@@ -298,7 +530,9 @@ function AdminJogadorDropdown({
   const jogadoresDaSel = useMemo(
     () =>
       selFiltroId
-        ? jogadores.filter((j) => j.selecao_id === selFiltroId).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        ? jogadores
+            .filter((j) => j.selecao_id === selFiltroId)
+            .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
         : [],
     [jogadores, selFiltroId],
   );
@@ -315,7 +549,10 @@ function AdminJogadorDropdown({
       <div className="flex-1">
         <AdminSelecaoDropdown
           value={selFiltroId}
-          onChange={(id) => { setSelFiltroId(id); onChangeArtilheiro(""); }}
+          onChange={(id) => {
+            setSelFiltroId(id);
+            onChangeArtilheiro("");
+          }}
           selecoes={selecoesList}
           placeholder="Seleção..."
         />
@@ -330,11 +567,15 @@ function AdminJogadorDropdown({
             >
               {jogadorSel ? (
                 <>
-                  {selFiltro && <Flag codigo={selFiltro.codigo} bandeira={selFiltro.bandeira} size={14} />}
+                  {selFiltro && (
+                    <Flag codigo={selFiltro.codigo} bandeira={selFiltro.bandeira} size={14} />
+                  )}
                   <span className="flex-1 truncate">{jogadorSel.nome}</span>
                 </>
               ) : (
-                <span className="flex-1 text-muted-foreground">{selFiltroId ? "Jogador..." : "—"}</span>
+                <span className="flex-1 text-muted-foreground">
+                  {selFiltroId ? "Jogador..." : "—"}
+                </span>
               )}
               <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90 text-muted-foreground" />
             </button>
@@ -353,7 +594,11 @@ function AdminJogadorDropdown({
               <li>
                 <button
                   type="button"
-                  onClick={() => { onChangeArtilheiro(""); setOpenJog(false); setBuscaJog(""); }}
+                  onClick={() => {
+                    onChangeArtilheiro("");
+                    setOpenJog(false);
+                    setBuscaJog("");
+                  }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/50"
                 >
                   — nenhum —
@@ -363,7 +608,11 @@ function AdminJogadorDropdown({
                 <li key={j.id}>
                   <button
                     type="button"
-                    onClick={() => { onChangeArtilheiro(j.id); setOpenJog(false); setBuscaJog(""); }}
+                    onClick={() => {
+                      onChangeArtilheiro(j.id);
+                      setOpenJog(false);
+                      setBuscaJog("");
+                    }}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-secondary/50 ${j.id === artilheiroId ? "bg-primary/10 font-medium" : ""}`}
                   >
                     {j.nome}
@@ -396,9 +645,13 @@ function ResultadoExtrasAdmin({ selecoes }: { selecoes: Selecao[] }) {
 
   useEffect(() => {
     if (!aberto || jogadores.length > 0) return;
-    supabase.from("jogadores").select("id,nome,selecao_id").order("nome").then(({ data }) => {
-      setJogadores((data ?? []) as Jogador[]);
-    });
+    supabase
+      .from("jogadores")
+      .select("id,nome,selecao_id")
+      .order("nome")
+      .then(({ data }) => {
+        setJogadores((data ?? []) as Jogador[]);
+      });
   }, [aberto, jogadores.length]);
 
   async function calcular() {
@@ -430,7 +683,9 @@ function ResultadoExtrasAdmin({ selecoes }: { selecoes: Selecao[] }) {
         className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
       >
         <span>Palpites Especiais — Resultado Real</span>
-        <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${aberto ? "rotate-90" : "-rotate-90"}`} />
+        <ChevronRight
+          className={`h-4 w-4 text-muted-foreground transition-transform ${aberto ? "rotate-90" : "-rotate-90"}`}
+        />
       </button>
       {aberto && (
         <div className="border-t border-border px-4 py-4 space-y-4">
@@ -592,17 +847,22 @@ function PartidaAdminRow({
           {partida.grupo ? ` · Grupo ${partida.grupo}` : ""} · {data}
         </span>
         <div className="flex items-center gap-2">
-          <span
-            className={`rounded-full px-2 py-0.5 font-semibold ${
-              partida.status === "finalizada"
-                ? "bg-accent/20 text-accent"
-                : partida.status === "em_andamento"
-                  ? "bg-primary/20 text-primary"
-                  : "bg-secondary text-muted-foreground"
-            }`}
-          >
-            {partida.status}
-          </span>
+          {(() => {
+            const sr = statusReal(partida);
+            return (
+              <span
+                className={`rounded-full px-2 py-0.5 font-semibold ${
+                  sr === "finalizada"
+                    ? "bg-accent/20 text-accent"
+                    : sr === "em_andamento"
+                      ? "bg-primary/20 text-primary"
+                      : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {STATUS_LABEL[sr]}
+              </span>
+            );
+          })()}
           <button
             onClick={() => setEditando((v) => !v)}
             disabled={saving}
