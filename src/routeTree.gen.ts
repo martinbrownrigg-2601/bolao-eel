@@ -13,6 +13,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedTabelaRouteImport } from './routes/_authenticated/tabela'
 import { Route as AuthenticatedRankingRouteImport } from './routes/_authenticated/ranking'
 import { Route as AuthenticatedBoloesRouteImport } from './routes/_authenticated/boloes'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
@@ -41,6 +42,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTabelaRoute = AuthenticatedTabelaRouteImport.update({
+  id: '/tabela',
+  path: '/tabela',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedRankingRoute = AuthenticatedRankingRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/boloes': typeof AuthenticatedBoloesRouteWithChildren
   '/ranking': typeof AuthenticatedRankingRoute
+  '/tabela': typeof AuthenticatedTabelaRoute
   '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
   '/api/public/sb-config.js': typeof ApiPublicSbConfigDotjsRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/ranking': typeof AuthenticatedRankingRoute
+  '/tabela': typeof AuthenticatedTabelaRoute
   '/': typeof AuthenticatedIndexRoute
   '/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/boloes': typeof AuthenticatedBoloesRouteWithChildren
   '/_authenticated/ranking': typeof AuthenticatedRankingRoute
+  '/_authenticated/tabela': typeof AuthenticatedTabelaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/boloes/$id': typeof AuthenticatedBoloesIdRoute
   '/_authenticated/palpites/grupos': typeof AuthenticatedPalpitesGruposRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/boloes'
     | '/ranking'
+    | '/tabela'
     | '/boloes/$id'
     | '/palpites/grupos'
     | '/api/public/sb-config.js'
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/ranking'
+    | '/tabela'
     | '/'
     | '/boloes/$id'
     | '/palpites/grupos'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/boloes'
     | '/_authenticated/ranking'
+    | '/_authenticated/tabela'
     | '/_authenticated/'
     | '/_authenticated/boloes/$id'
     | '/_authenticated/palpites/grupos'
@@ -228,6 +240,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/tabela': {
+      id: '/_authenticated/tabela'
+      path: '/tabela'
+      fullPath: '/tabela'
+      preLoaderRoute: typeof AuthenticatedTabelaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/ranking': {
@@ -322,6 +341,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedBoloesRoute: typeof AuthenticatedBoloesRouteWithChildren
   AuthenticatedRankingRoute: typeof AuthenticatedRankingRoute
+  AuthenticatedTabelaRoute: typeof AuthenticatedTabelaRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedPalpitesGruposRoute: typeof AuthenticatedPalpitesGruposRoute
   AuthenticatedPalpitesCompararIdRoute: typeof AuthenticatedPalpitesCompararIdRoute
@@ -332,6 +352,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedBoloesRoute: AuthenticatedBoloesRouteWithChildren,
   AuthenticatedRankingRoute: AuthenticatedRankingRoute,
+  AuthenticatedTabelaRoute: AuthenticatedTabelaRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedPalpitesGruposRoute: AuthenticatedPalpitesGruposRoute,
   AuthenticatedPalpitesCompararIdRoute: AuthenticatedPalpitesCompararIdRoute,

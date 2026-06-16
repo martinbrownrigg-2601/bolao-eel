@@ -79,6 +79,11 @@ export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [{ title: "Admin — Resultados | BolãoEEL" }],
   }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    prefill_fase: typeof search.prefill_fase === "string" ? search.prefill_fase : undefined,
+    prefill_mandante: typeof search.prefill_mandante === "string" ? search.prefill_mandante : undefined,
+    prefill_visitante: typeof search.prefill_visitante === "string" ? search.prefill_visitante : undefined,
+  }),
   component: AdminPage,
 });
 
@@ -97,6 +102,7 @@ type Partida = {
 };
 
 function AdminPage() {
+  const { prefill_fase, prefill_mandante, prefill_visitante } = Route.useSearch();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
@@ -301,7 +307,11 @@ function AdminPage() {
 
       <ResultadoExtrasAdmin selecoes={selecoesList} />
 
-      <CriarPartida selecoes={selecoesList} onCriada={() => void carregar()} />
+      <CriarPartida
+        selecoes={selecoesList}
+        onCriada={() => void carregar()}
+        prefill={prefill_fase ? { fase: prefill_fase, mandante: prefill_mandante, visitante: prefill_visitante } : undefined}
+      />
 
       {/* Linha de controles: toggle Data/Fase + (no modo data) picker de calendário */}
       {porStatus.length > 0 && (
@@ -1130,9 +1140,26 @@ const FORM_VAZIO: FormState = {
   estadio: "",
 };
 
-function CriarPartida({ selecoes, onCriada }: { selecoes: Selecao[]; onCriada: () => void }) {
-  const [aberto, setAberto] = useState(false);
-  const [form, setForm] = useState<FormState>(FORM_VAZIO);
+function CriarPartida({
+  selecoes,
+  onCriada,
+  prefill,
+}: {
+  selecoes: Selecao[];
+  onCriada: () => void;
+  prefill?: { fase?: string; mandante?: string; visitante?: string };
+}) {
+  const [aberto, setAberto] = useState(!!prefill);
+  const [form, setForm] = useState<FormState>(() =>
+    prefill
+      ? {
+          ...FORM_VAZIO,
+          fase: prefill.fase ?? FORM_VAZIO.fase,
+          mandante: prefill.mandante ?? "",
+          visitante: prefill.visitante ?? "",
+        }
+      : FORM_VAZIO,
+  );
   const [saving, setSaving] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState(false);

@@ -2,7 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { supabase } from "@/lib/supabase";
-import { LogOut, Home, Target, Users, Shield, Trophy, Eye, ChevronDown, Check } from "lucide-react";
+import { LogOut, Home, Target, Users, Shield, Trophy, Eye, ChevronDown, Check, BarChart2 } from "lucide-react";
 import { useBolao } from "@/contexts/BolaoContext";
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ const baseNav = [
   { to: "/palpites/grupos" as const, label: "Palpites", icon: Target, exact: false },
   { to: "/palpites/comparar" as const, label: "Comparar", icon: Eye, exact: false },
   { to: "/ranking" as const, label: "Ranking", icon: Trophy, exact: false },
+  { to: "/tabela" as const, label: "Tabela", icon: BarChart2, exact: false },
   { to: "/boloes" as const, label: "Bolões", icon: Users, exact: false },
 ];
 
