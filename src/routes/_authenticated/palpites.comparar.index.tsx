@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
@@ -95,6 +95,7 @@ function CompararIndex() {
   const [erro, setErro] = useState<string | null>(null);
 
   const extrasVisiveis = new Date() >= PRAZO_EXTRAS;
+  const [extrasExpandido, setExtrasExpandido] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -310,68 +311,81 @@ function CompararIndex() {
 
       {/* Palpites Especiais — visível apenas após o prazo */}
       {extrasVisiveis && bolaoAtivo && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
-          <h2 className="font-semibold text-base">Palpites Especiais</h2>
-          {palpitesExtras.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum palpite especial registrado.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
-                    <th className="pb-2 pr-4">Membro</th>
-                    <th className="pb-2 pr-4">Artilheiro</th>
-                    <th className="pb-2 pr-4">Campeã</th>
-                    <th className="pb-2 text-right">Pts</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {palpitesExtras
-                    .sort((a, b) => (b.pontos_ganhos ?? -1) - (a.pontos_ganhos ?? -1))
-                    .map((pe) => {
-                      const jog = pe.artilheiro_id ? jogadores[pe.artilheiro_id] : null;
-                      const sel = pe.campeao_id ? selecoes[pe.campeao_id] : null;
-                      const jogSel = jog ? selecoes[jog.selecao_id] : null;
-                      return (
-                        <tr key={pe.usuario_id} className="py-1">
-                          <td className="py-2 pr-4 font-medium">
-                            {nomesExtras[pe.usuario_id] ?? "—"}
-                          </td>
-                          <td className="py-2 pr-4 text-muted-foreground">
-                            {jog ? (
-                              <span className="flex items-center gap-1.5 flex-wrap">
-                                <span>{jog.nome}</span>
-                                {jogSel && (
-                                  <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-                                    <Flag codigo={jogSel.codigo} bandeira={jogSel.bandeira} size={13} />
-                                    {jogSel.nome}
+        <div className="rounded-xl border border-primary/30 bg-primary/5">
+          <button
+            type="button"
+            onClick={() => setExtrasExpandido((v) => !v)}
+            className="flex w-full items-center justify-between p-4 text-left"
+          >
+            <h2 className="font-semibold text-base">Palpites Especiais</h2>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${extrasExpandido ? "rotate-180" : ""}`}
+            />
+          </button>
+          {extrasExpandido && (
+            <div className="border-t border-primary/20 px-4 pb-4 pt-3 space-y-3">
+              {palpitesExtras.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum palpite especial registrado.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase tracking-wide">
+                        <th className="pb-2 pr-4">Membro</th>
+                        <th className="pb-2 pr-4">Artilheiro</th>
+                        <th className="pb-2 pr-4">Campeã</th>
+                        <th className="pb-2 text-right">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {palpitesExtras
+                        .sort((a, b) => (b.pontos_ganhos ?? -1) - (a.pontos_ganhos ?? -1))
+                        .map((pe) => {
+                          const jog = pe.artilheiro_id ? jogadores[pe.artilheiro_id] : null;
+                          const sel = pe.campeao_id ? selecoes[pe.campeao_id] : null;
+                          const jogSel = jog ? selecoes[jog.selecao_id] : null;
+                          return (
+                            <tr key={pe.usuario_id} className="py-1">
+                              <td className="py-2 pr-4 font-medium">
+                                {nomesExtras[pe.usuario_id] ?? "—"}
+                              </td>
+                              <td className="py-2 pr-4 text-muted-foreground">
+                                {jog ? (
+                                  <span className="flex items-center gap-1.5 flex-wrap">
+                                    <span>{jog.nome}</span>
+                                    {jogSel && (
+                                      <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+                                        <Flag codigo={jogSel.codigo} bandeira={jogSel.bandeira} size={13} />
+                                        {jogSel.nome}
+                                      </span>
+                                    )}
                                   </span>
+                                ) : "—"}
+                              </td>
+                              <td className="py-2 pr-4 text-muted-foreground">
+                                {sel ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <Flag codigo={sel.codigo} bandeira={sel.bandeira} size={14} />
+                                    {sel.nome}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                              <td className="py-2 text-right">
+                                {pe.pontos_ganhos != null ? (
+                                  <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
+                                    +{pe.pontos_ganhos} pts
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">—</span>
                                 )}
-                              </span>
-                            ) : "—"}
-                          </td>
-                          <td className="py-2 pr-4 text-muted-foreground">
-                            {sel ? (
-                              <span className="flex items-center gap-1.5">
-                                <Flag codigo={sel.codigo} bandeira={sel.bandeira} size={14} />
-                                {sel.nome}
-                              </span>
-                            ) : "—"}
-                          </td>
-                          <td className="py-2 text-right">
-                            {pe.pontos_ganhos != null ? (
-                              <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
-                                +{pe.pontos_ganhos} pts
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

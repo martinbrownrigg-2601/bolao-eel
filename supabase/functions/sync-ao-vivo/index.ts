@@ -74,12 +74,39 @@ Deno.serve(async (req) => {
   const jogos = payload.Results ?? [];
   const aoVivo = jogos.filter(estaAoVivo);
 
-  // Sem jogo ao vivo => encerra cedo (custo mínimo).
-  if (aoVivo.length === 0) {
-    return Response.json({ ao_vivo: 0, updated: 0 });
+  const resumo = { ao_vivo: aoVivo.length, updated: 0, encerrados: 0, errors: [] as { id?: string; msg: string }[] };
+
+  // Marca como encerrados (ao_vivo=false) todos os jogos que a FIFA reporta
+  // como finalizados e que não estão na lista ao vivo desta rodada.
+  // Feito ANTES do early-return para garantir limpeza mesmo quando não há
+  // nenhum jogo ao vivo (caso contrário registros antigos ficam presos em true).
+  const idsAoVivo = new Set(aoVivo.map((m) => String(m.IdMatch)));
+  const encerrados = jogos
+    .filter(
+      (m) => m.MatchStatus === STATUS_ENCERRADO && m.IdMatch && !idsAoVivo.has(String(m.IdMatch)),
+    )
+    .map((m) => String(m.IdMatch));
+  if (encerrados.length > 0) {
+    const { data: parts } = await sb
+      .from("partidas")
+      .select("id")
+      .in("fifa_match_id", encerrados);
+    const partidaIds = (parts ?? []).map((p) => p.id);
+    if (partidaIds.length > 0) {
+      const { count } = await sb
+        .from("placares_ao_vivo")
+        .update({ ao_vivo: false, atualizado_em: new Date().toISOString() })
+        .in("partida_id", partidaIds)
+        .eq("ao_vivo", true)
+        .select("id", { count: "exact", head: true });
+      resumo.encerrados = count ?? 0;
+    }
   }
 
-  const resumo = { ao_vivo: aoVivo.length, updated: 0, errors: [] as { id?: string; msg: string }[] };
+  // Sem jogo ao vivo => encerra cedo (custo mínimo).
+  if (aoVivo.length === 0) {
+    return Response.json(resumo);
+  }
 
   for (const m of aoVivo) {
     const { error } = await sb.rpc("upsert_placar_ao_vivo", {
@@ -96,29 +123,6 @@ Deno.serve(async (req) => {
       continue;
     }
     resumo.updated += 1;
-  }
-
-  // Marca como encerrados (ao_vivo=false) os jogos que a FIFA reporta como
-  // finalizados nesta volta. (O placar final e os pontos vêm de sync-resultados.)
-  const idsAoVivo = new Set(aoVivo.map((m) => String(m.IdMatch)));
-  const encerrados = jogos
-    .filter(
-      (m) => m.MatchStatus === STATUS_ENCERRADO && m.IdMatch && !idsAoVivo.has(String(m.IdMatch)),
-    )
-    .map((m) => String(m.IdMatch));
-  if (encerrados.length > 0) {
-    const { data: parts } = await sb
-      .from("partidas")
-      .select("id")
-      .in("fifa_match_id", encerrados);
-    const partidaIds = (parts ?? []).map((p) => p.id);
-    if (partidaIds.length > 0) {
-      await sb
-        .from("placares_ao_vivo")
-        .update({ ao_vivo: false, atualizado_em: new Date().toISOString() })
-        .in("partida_id", partidaIds)
-        .eq("ao_vivo", true);
-    }
   }
 
   return Response.json(resumo);
