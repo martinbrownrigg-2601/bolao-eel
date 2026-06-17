@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Trophy, Radio } from "lucide-react";
 import { useBolao } from "@/contexts/BolaoContext";
+import { BOLAO_COPA_2026_ID } from "@/lib/boloes-especiais";
 import WizardsImage from "../../images/Washington-Wizards-logo.png";
 
 export const Route = createFileRoute("/_authenticated/ranking")({
@@ -212,7 +213,7 @@ function RankingPage() {
                         {r.jogos} pontuado(s) · {r.palpites} palpite(s)
                       </div>
                     </div>
-                    {i === linhas.length - 1 && (
+                    {i === linhas.length - 1 && bolaoAtivo?.id === BOLAO_COPA_2026_ID && (
                       <img
                         src={WizardsImage}
                         alt="Ícone de ranking"

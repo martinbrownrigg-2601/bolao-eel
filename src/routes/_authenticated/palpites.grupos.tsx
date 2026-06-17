@@ -8,6 +8,7 @@ import { FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/fases";
 import { Flag } from "@/components/Flag";
 import yagoMissImage from "../../images/yago_miss.webp";
 import { useBolao } from "@/contexts/BolaoContext";
+import { BOLAO_COPA_2026_ID } from "@/lib/boloes-especiais";
 
 type Modo = "data" | "fase";
 
@@ -1010,18 +1011,39 @@ function PartidaRow({
       })
     : "Data a definir";
 
+  const { bolaoAtivo } = useBolao();
+  const eCopa2026 = bolaoAtivo?.id === BOLAO_COPA_2026_ID;
+
+  const acertouExato =
+    bloqueado &&
+    palpite != null &&
+    partida.gols_mandante != null &&
+    partida.gols_visitante != null &&
+    palpite.gols_mandante === partida.gols_mandante &&
+    palpite.gols_visitante === partida.gols_visitante;
+
   const semPontuacao = (palpite?.pontos_ganhos ?? 0) <= 0;
   const mostraYagoAposFim = (() => {
+    if (!eCopa2026) return false;
     if (!bloqueado || !semPontuacao) return false;
     const bloqueadoEm = tempoBloqueio(partida);
     if (!bloqueadoEm) return false;
     const limiteExibicao = bloqueadoEm + 2 * 60 * 60 * 1000;
     return Date.now() >= limiteExibicao;
   })();
-  const mostrarYago = mostraYagoAposFim;
+
+  const mostrarAustinReaves = eCopa2026 && acertouExato;
+  const mostrarYago = !mostrarAustinReaves && mostraYagoAposFim;
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4">
+    <li className="relative flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 overflow-hidden">
+      {mostrarAustinReaves && (
+        <img
+          src="https://media1.tenor.com/m/r9CdFhGNJxAAAAAd/austin-reaves-reaves.gif"
+          alt="I'm him!"
+          className="absolute top-1/2 -translate-y-1/2 right-24 h-3/5 w-auto object-cover pointer-events-none"
+        />
+      )}
       <div className="flex-1">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
