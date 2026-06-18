@@ -30,11 +30,17 @@ export const Route = createFileRoute("/_authenticated/palpites/comparar/")({
 
 type Modo = "data" | "fase";
 
+// Retorna "YYYY-MM-DD" no fuso de Brasília (UTC-3).
+// Jogos entre 00h e 02h59 (Brasília) são agrupados no dia anterior.
 function diaLocal(iso: string): string {
   const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const horaBrasilia = (d.getUTCHours() - 3 + 24) % 24;
+  const recuar = horaBrasilia < 3;
+  const msBrasilia = d.getTime() - 3 * 3600_000 - (recuar ? 24 * 3600_000 : 0);
+  const ref = new Date(msBrasilia);
+  const y = ref.getUTCFullYear();
+  const m = String(ref.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(ref.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
 
@@ -75,6 +81,13 @@ type Partida = {
   gols_mandante: number | null;
   gols_visitante: number | null;
 };
+type PlacarLive = {
+  partida_id: string;
+  ao_vivo: boolean;
+  gols_mandante_live: number | null;
+  gols_visitante_live: number | null;
+  minuto: string | null;
+};
 
 function jaIniciada(p: Partida): boolean {
   if (p.status !== "aguardando") return true;
@@ -93,6 +106,7 @@ function CompararIndex() {
   const [nomesExtras, setNomesExtras] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [placaresLive, setPlacaresLive] = useState<Record<string, PlacarLive>>({});
 
   const extrasVisiveis = new Date() >= PRAZO_EXTRAS;
   const [extrasExpandido, setExtrasExpandido] = useState(false);
@@ -144,6 +158,32 @@ function CompararIndex() {
       }
     })();
   }, [bolaoAtivo, extrasVisiveis]);
+
+  useEffect(() => {
+    let cancelado = false;
+    async function buscarLive(): Promise<boolean> {
+      const { data } = await supabase
+        .from("placares_ao_vivo")
+        .select("partida_id,gols_mandante_live,gols_visitante_live,minuto,ao_vivo")
+        .eq("ao_vivo", true);
+      if (cancelado) return false;
+      const m: Record<string, PlacarLive> = {};
+      (data ?? []).forEach((l) => (m[l.partida_id] = l as PlacarLive));
+      setPlacaresLive(m);
+      return (data ?? []).length > 0;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const agendar = (temLive: boolean) => {
+      if (cancelado) return;
+      timer = setTimeout(loop, temLive ? 45_000 : 5 * 60_000);
+    };
+    const loop = async () => agendar(await buscarLive());
+    void loop();
+    return () => {
+      cancelado = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   const iniciadas = useMemo(() => partidas.filter(jaIniciada), [partidas]);
 
@@ -244,6 +284,8 @@ function CompararIndex() {
     const m = selecoes[p.mandante_id];
     const v = selecoes[p.visitante_id];
     const temPlacar = p.gols_mandante != null && p.gols_visitante != null;
+    const live = placaresLive[p.id];
+    const isLive = !!(live?.ao_vivo);
     const data = p.data_hora
       ? new Date(p.data_hora).toLocaleString("pt-BR", {
           day: "2-digit",
@@ -262,9 +304,9 @@ function CompararIndex() {
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {!temPlacar && (
+              {isLive && (
                 <span className="rounded bg-primary/15 px-1.5 py-0.5 font-semibold text-primary">
-                  ao vivo
+                  ao vivo{live.minuto ? ` · ${live.minuto}` : ""}
                 </span>
               )}
               <span>
@@ -278,6 +320,10 @@ function CompararIndex() {
               {temPlacar ? (
                 <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-xs font-semibold tabular-nums">
                   {p.gols_mandante} × {p.gols_visitante}
+                </span>
+              ) : isLive && live.gols_mandante_live != null && live.gols_visitante_live != null ? (
+                <span className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-primary">
+                  {live.gols_mandante_live} × {live.gols_visitante_live}
                 </span>
               ) : (
                 <span className="shrink-0 text-xs font-semibold text-muted-foreground">vs</span>

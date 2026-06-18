@@ -20,12 +20,17 @@ import { FASES_TODAS, FASE_LABEL, FASE_LABEL_CURTO, ordenarFases } from "@/lib/f
 
 type Modo = "data" | "fase";
 
-// Chave de dia no fuso LOCAL (não UTC) — "YYYY-MM-DD".
+// Retorna "YYYY-MM-DD" no fuso de Brasília (UTC-3).
+// Jogos entre 00h e 02h59 (Brasília) são agrupados no dia anterior.
 function diaLocal(iso: string): string {
   const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+  const horaBrasilia = (d.getUTCHours() - 3 + 24) % 24;
+  const recuar = horaBrasilia < 3;
+  const msBrasilia = d.getTime() - 3 * 3600_000 - (recuar ? 24 * 3600_000 : 0);
+  const ref = new Date(msBrasilia);
+  const y = ref.getUTCFullYear();
+  const m = String(ref.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(ref.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
 
