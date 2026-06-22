@@ -1041,15 +1041,15 @@ function PartidaRow({
   const mostrarYago = !mostrarAustinReaves && mostraYagoAposFim;
 
   return (
-    <li className="relative flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 overflow-hidden">
+    <li className="relative flex items-start gap-3 rounded-lg border border-border bg-card p-3 sm:p-4 sm:overflow-hidden">
       {mostrarAustinReaves && (
         <img
           src="https://media1.tenor.com/m/r9CdFhGNJxAAAAAd/austin-reaves-reaves.gif"
           alt="I'm him!"
-          className="absolute top-1/2 -translate-y-1/2 right-24 h-3/5 w-auto object-cover pointer-events-none"
+          className="absolute top-1/2 right-2 h-2/5 w-auto -translate-y-1/2 object-cover pointer-events-none opacity-70 sm:right-24 sm:h-3/5 sm:opacity-100"
         />
       )}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {grupoLabel && (
@@ -1066,22 +1066,32 @@ function PartidaRow({
             </span>
           )}
         </div>
-        <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="flex items-center justify-end gap-2 text-right">
-            <span className="font-medium truncate">{mandante?.nome ?? "—"}</span>
-            <Flag codigo={mandante?.codigo} bandeira={mandante?.bandeira} size={18} />
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-3">
+          <div className="flex min-w-0 items-center justify-end gap-1.5 text-right sm:gap-2">
+            <span className="truncate font-medium">{mandante?.nome ?? "—"}</span>
+            <Flag
+              codigo={mandante?.codigo}
+              bandeira={mandante?.bandeira}
+              size={18}
+              className="shrink-0"
+            />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <ScoreInput value={gm} onChange={setGm} disabled={bloqueado || saving} />
             <span className="text-muted-foreground">×</span>
             <ScoreInput value={gv} onChange={setGv} disabled={bloqueado || saving} />
           </div>
-          <div className="flex items-center gap-2">
-            <Flag codigo={visitante?.codigo} bandeira={visitante?.bandeira} size={18} />
-            <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            <Flag
+              codigo={visitante?.codigo}
+              bandeira={visitante?.bandeira}
+              size={18}
+              className="shrink-0"
+            />
+            <span className="truncate font-medium">{visitante?.nome ?? "—"}</span>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {bloqueado ? (
               <div className="flex items-center gap-2">
@@ -1094,7 +1104,7 @@ function PartidaRow({
                 </Link>
               </div>
             ) : (
-              "Você pode editar até o início do jogo."
+              <span className="hidden sm:inline">Você pode editar até o início do jogo.</span>
             )}
           </div>
           {!bloqueado && (
@@ -1119,7 +1129,7 @@ function PartidaRow({
           <img
             src={yagoMissImage}
             alt="Sem pontuação"
-            className="mt-1 h-22 w-22  shrink-0 rounded-full object-cover ring-2 ring-border shadow-sm"
+            className="mt-1 h-14 w-14 shrink-0 rounded-full object-cover ring-2 ring-border shadow-sm sm:h-22 sm:w-22"
           />
         </div>
       )}
