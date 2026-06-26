@@ -88,6 +88,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
     prefill_fase: typeof search.prefill_fase === "string" ? search.prefill_fase : undefined,
     prefill_mandante: typeof search.prefill_mandante === "string" ? search.prefill_mandante : undefined,
     prefill_visitante: typeof search.prefill_visitante === "string" ? search.prefill_visitante : undefined,
+    prefill_slot: typeof search.prefill_slot === "string" ? search.prefill_slot : undefined,
   }),
   component: AdminPage,
 });
@@ -107,7 +108,7 @@ type Partida = {
 };
 
 function AdminPage() {
-  const { prefill_fase, prefill_mandante, prefill_visitante } = Route.useSearch();
+  const { prefill_fase, prefill_mandante, prefill_visitante, prefill_slot } = Route.useSearch();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [selecoes, setSelecoes] = useState<Record<string, Selecao>>({});
@@ -315,7 +316,7 @@ function AdminPage() {
       <CriarPartida
         selecoes={selecoesList}
         onCriada={() => void carregar()}
-        prefill={prefill_fase ? { fase: prefill_fase, mandante: prefill_mandante, visitante: prefill_visitante } : undefined}
+        prefill={prefill_fase ? { fase: prefill_fase, mandante: prefill_mandante, visitante: prefill_visitante, slot: prefill_slot } : undefined}
       />
 
       {/* Linha de controles: toggle Data/Fase + (no modo data) picker de calendário */}
@@ -1041,6 +1042,9 @@ type FormState = {
   visitante: string;
   dataHora: string;
   estadio: string;
+  // Slot do chaveamento (M73…M104) quando a partida é criada a partir do bracket.
+  // Vincula a partida ao card certo, independente do horário. Vazio fora do mata-mata.
+  slot?: string;
 };
 
 function CamposPartida({
@@ -1132,6 +1136,7 @@ async function salvarPartida(form: FormState, partidaId?: string): Promise<strin
     _data_hora: form.dataHora ? new Date(form.dataHora).toISOString() : null,
     _estadio: form.estadio || null,
     _partida_id: partidaId ?? null,
+    _bracket_slot: form.slot || null,
   });
   return error ? error.message : null;
 }
@@ -1152,7 +1157,7 @@ function CriarPartida({
 }: {
   selecoes: Selecao[];
   onCriada: () => void;
-  prefill?: { fase?: string; mandante?: string; visitante?: string };
+  prefill?: { fase?: string; mandante?: string; visitante?: string; slot?: string };
 }) {
   const [aberto, setAberto] = useState(!!prefill);
   const [form, setForm] = useState<FormState>(() =>
@@ -1162,6 +1167,7 @@ function CriarPartida({
           fase: prefill.fase ?? FORM_VAZIO.fase,
           mandante: prefill.mandante ?? "",
           visitante: prefill.visitante ?? "",
+          slot: prefill.slot,
         }
       : FORM_VAZIO,
   );

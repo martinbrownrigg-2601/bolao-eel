@@ -39,6 +39,7 @@ type Partida = {
   status: string;
   data_hora: string | null;
   estadio: string | null;
+  bracket_slot: string | null;
   cartoes_amarelos_mandante: number | null;
   cartoes_vermelhos_mandante: number | null;
   cartoes_amarelos_visitante: number | null;
@@ -338,8 +339,8 @@ function TabelaPage() {
     (async () => {
       const [{ data: sels }, { data: parts }, { data: mm }, { data: u }] = await Promise.all([
         supabase.from("selecoes").select("id,codigo,nome,bandeira,grupo,fifa_ranking"),
-        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").eq("fase", "grupos"),
-        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").neq("fase", "grupos"),
+        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").eq("fase", "grupos"),
+        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").neq("fase", "grupos"),
         supabase.auth.getUser(),
       ]);
 
@@ -677,7 +678,10 @@ function SubabaMataMAta({
     return m;
   }, [mataMata]);
 
-  // Mapa slotId → partida (por posição dentro da fase, em ordem)
+  // Mapa slotId → partida.
+  // Preferência: o slot gravado em partidas.bracket_slot (vínculo explícito,
+  // imune a horário). Fallback (partidas antigas sem bracket_slot): preenche os
+  // slots ainda livres da fase na ordem cronológica por data_hora.
   const partidasPorSlot = useMemo(() => {
     const m = new Map<string, Partida>();
     const ordemFases: { fase: string; slots: string[] }[] = [
@@ -690,12 +694,37 @@ function SubabaMataMAta({
     ];
     for (const { fase, slots } of ordemFases) {
       const parts = partidasPorFase[fase] ?? [];
-      slots.forEach((slotId, i) => {
-        if (parts[i]) m.set(slotId, parts[i]);
+      const slotsValidos = new Set(slots);
+      // 1) Vínculo explícito por bracket_slot.
+      const semVinculo: Partida[] = [];
+      for (const p of parts) {
+        if (p.bracket_slot && slotsValidos.has(p.bracket_slot)) {
+          m.set(p.bracket_slot, p);
+        } else {
+          semVinculo.push(p);
+        }
+      }
+      // 2) Fallback cronológico para os slots que sobraram (já ordenado por data_hora).
+      const livres = slots.filter((s) => !m.has(s));
+      semVinculo.forEach((p, i) => {
+        if (livres[i]) m.set(livres[i], p);
       });
     }
     return m;
   }, [partidasPorFase]);
+
+  // Times que já estão numa partida real de cada fase. A projeção (resolverSlot/
+  // resolverVencedor) NÃO pode reposicionar esses times em outro slot, senão o
+  // mesmo time apareceria duas vezes: uma no card da partida real (ligado por
+  // ordem de data_hora) e outra no slot "natural" projetado pela classificação.
+  const idsEmPartidaReal = useMemo(() => {
+    const m: Record<string, Set<string>> = {};
+    for (const p of mataMata) {
+      (m[p.fase] ??= new Set()).add(p.mandante_id);
+      m[p.fase].add(p.visitante_id);
+    }
+    return m;
+  }, [mataMata]);
 
   function buildCard(slotId: string, descA: string, descB: string, posA: string, posB: string, fase: string): ResolvedCard {
     const partida = partidasPorSlot.get(slotId) ?? null;
@@ -705,9 +734,13 @@ function SubabaMataMAta({
       selA = selMap[partida.mandante_id] ?? null;
       selB = selMap[partida.visitante_id] ?? null;
     } else {
-      // Tentar resolver do bracket de grupos
+      // Tentar resolver do bracket de grupos, mas sem reprojetar times que já
+      // estão numa partida real desta fase (evita card duplicado).
+      const usados = idsEmPartidaReal[fase];
       selA = resolverSlot(posA, classificacao);
       selB = resolverSlot(posB, classificacao);
+      if (usados?.has(selA?.id ?? "")) selA = null;
+      if (usados?.has(selB?.id ?? "")) selB = null;
     }
     return { slotId, fase, partida, selA, selB, descA, descB };
   }
@@ -720,8 +753,11 @@ function SubabaMataMAta({
       selA = selMap[partida.mandante_id] ?? null;
       selB = selMap[partida.visitante_id] ?? null;
     } else {
+      const usados = idsEmPartidaReal[slot.fase];
       selA = resolverVencedor(slot.feedA, partidasPorSlot, selMap);
       selB = resolverVencedor(slot.feedB, partidasPorSlot, selMap);
+      if (usados?.has(selA?.id ?? "")) selA = null;
+      if (usados?.has(selB?.id ?? "")) selB = null;
     }
     const descA = `Vencedor ${slot.feedA}`;
     const descB = `Vencedor ${slot.feedB}`;
@@ -750,6 +786,7 @@ function SubabaMataMAta({
         prefill_fase: card.fase,
         prefill_mandante: card.selA?.codigo,
         prefill_visitante: card.selB?.codigo,
+        prefill_slot: card.slotId,
       },
     });
   }
