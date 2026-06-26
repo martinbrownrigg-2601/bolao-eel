@@ -105,6 +105,8 @@ type Partida = {
   visitante_id: string;
   gols_mandante: number | null;
   gols_visitante: number | null;
+  penaltis_mandante: number | null;
+  penaltis_visitante: number | null;
 };
 
 function AdminPage() {
@@ -822,6 +824,13 @@ function PartidaAdminRow({
   const [gv, setGv] = useState<string>(
     partida.gols_visitante != null ? String(partida.gols_visitante) : "",
   );
+  // Pênaltis (só relevantes em empate de mata-mata).
+  const [pm, setPm] = useState<string>(
+    partida.penaltis_mandante != null ? String(partida.penaltis_mandante) : "",
+  );
+  const [pv, setPv] = useState<string>(
+    partida.penaltis_visitante != null ? String(partida.penaltis_visitante) : "",
+  );
   const [status, setStatus] = useState<Partida["status"]>(partida.status);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -873,11 +882,23 @@ function PartidaAdminRow({
       if (status === "finalizada" && (nm == null || nv == null)) {
         throw new Error("Informe o placar para finalizar.");
       }
+      // Pênaltis só valem em empate de mata-mata; fora disso grava null.
+      const empateMataMata = partida.fase !== "grupos" && nm != null && nm === nv;
+      const npm = empateMataMata && pm !== "" ? parseInt(pm, 10) : null;
+      const npv = empateMataMata && pv !== "" ? parseInt(pv, 10) : null;
+      if (empateMataMata && (npm != null) !== (npv != null)) {
+        throw new Error("Informe os pênaltis dos dois lados (ou nenhum).");
+      }
+      if (npm != null && npm === npv) {
+        throw new Error("A disputa de pênaltis não pode terminar empatada.");
+      }
       const { data, error } = await supabase
         .from("partidas")
         .update({
           gols_mandante: nm,
           gols_visitante: nv,
+          penaltis_mandante: npm,
+          penaltis_visitante: npv,
           status,
           atualizada_em: new Date().toISOString(),
         })
@@ -996,6 +1017,17 @@ function PartidaAdminRow({
           <span className="font-medium truncate">{visitante?.nome ?? "—"}</span>
         </div>
       </div>
+      {partida.fase !== "grupos" && gm !== "" && gv !== "" && parseInt(gm, 10) === parseInt(gv, 10) && (
+        <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <span className="text-right text-[11px] text-muted-foreground">Pênaltis</span>
+          <div className="flex items-center gap-2">
+            <ScoreInput value={pm} onChange={setPm} disabled={saving} />
+            <span className="text-muted-foreground">×</span>
+            <ScoreInput value={pv} onChange={setPv} disabled={saving} />
+          </div>
+          <span />
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <select
           value={status}

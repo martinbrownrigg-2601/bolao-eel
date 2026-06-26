@@ -37,6 +37,8 @@ type Partida = {
   visitante_id: string;
   gols_mandante: number | null;
   gols_visitante: number | null;
+  penaltis_mandante: number | null;
+  penaltis_visitante: number | null;
   status: string;
   data_hora: string | null;
   estadio: string | null;
@@ -375,8 +377,8 @@ function TabelaPage() {
     (async () => {
       const [{ data: sels }, { data: parts }, { data: mm }, { data: u }] = await Promise.all([
         supabase.from("selecoes").select("id,codigo,nome,bandeira,grupo,fifa_ranking"),
-        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").eq("fase", "grupos"),
-        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").neq("fase", "grupos"),
+        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,penaltis_mandante,penaltis_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").eq("fase", "grupos"),
+        supabase.from("partidas").select("id,fase,grupo,mandante_id,visitante_id,gols_mandante,gols_visitante,penaltis_mandante,penaltis_visitante,status,data_hora,estadio,bracket_slot,cartoes_amarelos_mandante,cartoes_vermelhos_mandante,cartoes_amarelos_visitante,cartoes_vermelhos_visitante").neq("fase", "grupos"),
         supabase.auth.getUser(),
       ]);
 
@@ -665,7 +667,12 @@ function resolverVencedor(
   if (!p || p.gols_mandante == null || p.gols_visitante == null) return null;
   if (p.gols_mandante > p.gols_visitante) return selMap[p.mandante_id] ?? null;
   if (p.gols_visitante > p.gols_mandante) return selMap[p.visitante_id] ?? null;
-  return null; // empate na pênaltis (não rastreado aqui)
+  // Empate no tempo normal/prorrogação → decide nos pênaltis.
+  if (p.penaltis_mandante != null && p.penaltis_visitante != null) {
+    if (p.penaltis_mandante > p.penaltis_visitante) return selMap[p.mandante_id] ?? null;
+    if (p.penaltis_visitante > p.penaltis_mandante) return selMap[p.visitante_id] ?? null;
+  }
+  return null; // empate sem pênaltis registrados (indefinido)
 }
 
 type ResolvedCard = {
@@ -1031,6 +1038,21 @@ function BracketCard({
   const gmand = isLive ? (live?.gols_mandante_live ?? null) : (card.partida?.gols_mandante ?? null);
   const gvis = isLive ? (live?.gols_visitante_live ?? null) : (card.partida?.gols_visitante ?? null);
 
+  // Pênaltis (mata-mata): só presentes quando o tempo normal/prorrogação empatou.
+  const pmand = card.partida?.penaltis_mandante ?? null;
+  const pvis = card.partida?.penaltis_visitante ?? null;
+  const temPenaltis = pmand != null && pvis != null;
+
+  // Vencedor do confronto (placar final + pênaltis no empate) — para o negrito.
+  const fgm = card.partida?.gols_mandante ?? null;
+  const fgv = card.partida?.gols_visitante ?? null;
+  const venceuA =
+    fgm != null && fgv != null &&
+    (fgm > fgv || (fgm === fgv && temPenaltis && pmand! > pvis!));
+  const venceuB =
+    fgm != null && fgv != null &&
+    (fgv > fgm || (fgm === fgv && temPenaltis && pvis! > pmand!));
+
   const selA = card.selA;
   const selB = card.selB;
 
@@ -1042,7 +1064,7 @@ function BracketCard({
       style={{ height: `${CARD_H}px`, width: "100%" }}
     >
       {/* Time A */}
-      <div className={`flex items-center justify-between px-2 py-1.5 ${isFinished && gmand != null && gvis != null && gmand > gvis! ? "font-semibold" : ""}`}>
+      <div className={`flex items-center justify-between px-2 py-1.5 ${venceuA ? "font-semibold" : ""}`}>
         <span className="flex items-center gap-1.5 truncate">
           {selA ? (
             <>
@@ -1055,6 +1077,7 @@ function BracketCard({
         </span>
         <span className={`ml-1 shrink-0 font-mono ${isLive ? "text-red-500" : ""}`}>
           {gmand != null ? gmand : ""}
+          {temPenaltis && <span className="ml-0.5 text-[9px] text-muted-foreground">({pmand})</span>}
         </span>
       </div>
 
@@ -1062,7 +1085,7 @@ function BracketCard({
       <div className="mx-2 border-t border-border/40" />
 
       {/* Time B */}
-      <div className={`flex items-center justify-between px-2 py-1.5 ${isFinished && gmand != null && gvis != null && gvis > gmand! ? "font-semibold" : ""}`}>
+      <div className={`flex items-center justify-between px-2 py-1.5 ${venceuB ? "font-semibold" : ""}`}>
         <span className="flex items-center gap-1.5 truncate">
           {selB ? (
             <>
@@ -1075,6 +1098,7 @@ function BracketCard({
         </span>
         <span className={`ml-1 shrink-0 font-mono ${isLive ? "text-red-500" : ""}`}>
           {gvis != null ? gvis : ""}
+          {temPenaltis && <span className="ml-0.5 text-[9px] text-muted-foreground">({pvis})</span>}
         </span>
       </div>
 

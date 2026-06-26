@@ -28,6 +28,10 @@ type FifaMatch = {
   MatchStatus?: number;
   HomeTeamScore?: number | null;
   AwayTeamScore?: number | null;
+  // Placar da disputa de pênaltis (0/0 quando não houve). A FIFA também envia
+  // Winner (IdTeam vencedor); usamos o placar de pênaltis para decidir e exibir.
+  HomeTeamPenaltyScore?: number | null;
+  AwayTeamPenaltyScore?: number | null;
   Home?: FifaTeam | null;
   Away?: FifaTeam | null;
 };
@@ -97,6 +101,14 @@ Deno.serve(async (req) => {
   };
 
   for (const m of encerrados) {
+    // Só tratamos como decidido nos pênaltis quando o tempo normal/prorrogação
+    // empatou E houve disputa (vencedor com > 0). Evita gravar 0–0 de pênaltis
+    // em empates da fase de grupos / jogos normais.
+    const homePen = m.HomeTeamPenaltyScore ?? 0;
+    const awayPen = m.AwayTeamPenaltyScore ?? 0;
+    const foiPenaltis =
+      m.HomeTeamScore === m.AwayTeamScore && (homePen > 0 || awayPen > 0);
+
     // --- Sync placar + pontuação ---
     const { data, error } = await sb.rpc("sync_resultado_partida", {
       _fifa_match_id: String(m.IdMatch),
@@ -104,6 +116,8 @@ Deno.serve(async (req) => {
       _away_fifa_id: String(m.Away!.IdTeam),
       _home_score: m.HomeTeamScore,
       _away_score: m.AwayTeamScore,
+      _home_penaltis: foiPenaltis ? homePen : null,
+      _away_penaltis: foiPenaltis ? awayPen : null,
     });
     if (error) {
       resumo.errors.push({ id: m.IdMatch, msg: error.message });
