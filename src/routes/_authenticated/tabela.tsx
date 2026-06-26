@@ -100,13 +100,16 @@ const SLOTS_32AVOS: BracketSlot[] = [
   { slotId: "M88", descA: "2º Grupo D", descB: "2º Grupo G", fase: "trinta_e_dois_avos", posA: "2D", posB: "2G" },
 ];
 
-// Progressão: [slotId vencedor] → slotId da rodada seguinte
-// Duplas que se enfrentam nas oitavas (ordem emparelhada dos 32 avos acima)
-// M73+M74 → M89, M75+M76 → M90, M77+M78 → M91, M79+M80 → M92
-// M81+M82 → M93, M83+M84 → M94, M85+M86 → M95, M87+M88 → M96
-// Quartas: M89+M90 → M97, M91+M92 → M98, M93+M94 → M99, M95+M96 → M100
-// Semis: M97+M98 → M101, M99+M100 → M102
-// Final: M101+M102 → M104  |  3º lugar: M101+M102 perdedores → M103
+// Progressão oficial FIFA 2026 — qual jogo alimenta qual (NÃO é emparelhamento
+// sequencial; segue o chaveamento publicado pela FIFA).
+// Oitavas:
+//   M89 = vencedores M74 + M77   M90 = M73 + M75
+//   M91 = M76 + M78              M92 = M79 + M80
+//   M93 = M83 + M84              M94 = M81 + M82
+//   M95 = M86 + M88              M96 = M85 + M87
+// Quartas: M89+M90 → M97, M93+M94 → M98, M91+M92 → M99, M95+M96 → M100
+// Semis:   M97+M98 → M101, M99+M100 → M102
+// Final:   M101+M102 → M104  |  3º lugar: perdedores M101/M102 → M103
 
 type RoundSlot = {
   slotId: string;
@@ -116,20 +119,20 @@ type RoundSlot = {
 };
 
 const SLOTS_OITAVAS: RoundSlot[] = [
-  { slotId: "M89", fase: "oitavas", feedA: "M73", feedB: "M74" },
-  { slotId: "M90", fase: "oitavas", feedA: "M75", feedB: "M76" },
-  { slotId: "M91", fase: "oitavas", feedA: "M77", feedB: "M78" },
+  { slotId: "M89", fase: "oitavas", feedA: "M74", feedB: "M77" },
+  { slotId: "M90", fase: "oitavas", feedA: "M73", feedB: "M75" },
+  { slotId: "M91", fase: "oitavas", feedA: "M76", feedB: "M78" },
   { slotId: "M92", fase: "oitavas", feedA: "M79", feedB: "M80" },
-  { slotId: "M93", fase: "oitavas", feedA: "M81", feedB: "M82" },
-  { slotId: "M94", fase: "oitavas", feedA: "M83", feedB: "M84" },
-  { slotId: "M95", fase: "oitavas", feedA: "M85", feedB: "M86" },
-  { slotId: "M96", fase: "oitavas", feedA: "M87", feedB: "M88" },
+  { slotId: "M93", fase: "oitavas", feedA: "M83", feedB: "M84" },
+  { slotId: "M94", fase: "oitavas", feedA: "M81", feedB: "M82" },
+  { slotId: "M95", fase: "oitavas", feedA: "M86", feedB: "M88" },
+  { slotId: "M96", fase: "oitavas", feedA: "M85", feedB: "M87" },
 ];
 
 const SLOTS_QUARTAS: RoundSlot[] = [
   { slotId: "M97", fase: "quartas", feedA: "M89", feedB: "M90" },
-  { slotId: "M98", fase: "quartas", feedA: "M91", feedB: "M92" },
-  { slotId: "M99", fase: "quartas", feedA: "M93", feedB: "M94" },
+  { slotId: "M98", fase: "quartas", feedA: "M93", feedB: "M94" },
+  { slotId: "M99", fase: "quartas", feedA: "M91", feedB: "M92" },
   { slotId: "M100", fase: "quartas", feedA: "M95", feedB: "M96" },
 ];
 
@@ -137,6 +140,17 @@ const SLOTS_SEMIS: RoundSlot[] = [
   { slotId: "M101", fase: "semifinais", feedA: "M97", feedB: "M98" },
   { slotId: "M102", fase: "semifinais", feedA: "M99", feedB: "M100" },
 ];
+
+// Ordem de exibição do bracket (árvore). Os slots acima ficam em ordem de número
+// de jogo (para casar com as partidas reais por horário), mas para desenhar o
+// chaveamento cada par adjacente precisa alimentar o MESMO jogo da rodada
+// seguinte. Estas ordens garantem que os conectores visuais batam com a
+// progressão real (vencedor avança para o card logo à direita).
+const ORDEM_DISPLAY_32 = [
+  "M74", "M77", "M73", "M75", "M83", "M84", "M81", "M82",
+  "M76", "M78", "M79", "M80", "M86", "M88", "M85", "M87",
+];
+const ORDEM_DISPLAY_OITAVAS = ["M89", "M90", "M93", "M94", "M91", "M92", "M95", "M96"];
 
 const SLOT_TERCEIRO: RoundSlot = { slotId: "M103", fase: "disputa_terceiro", feedA: "M101", feedB: "M102" };
 const SLOT_FINAL: RoundSlot = { slotId: "M104", fase: "final", feedA: "M101", feedB: "M102" };
@@ -717,6 +731,14 @@ function SubabaMataMAta({
   const cards32 = SLOTS_32AVOS.map((s) => buildCard(s.slotId, s.descA, s.descB, s.posA, s.posB, s.fase));
   const cardsOitavas = SLOTS_OITAVAS.map(buildRoundCard);
   const cardsQuartas = SLOTS_QUARTAS.map(buildRoundCard);
+
+  // Reordena para a árvore do bracket (ver ORDEM_DISPLAY_*): cada par adjacente
+  // alimenta o jogo logo à direita, então os conectores ficam corretos.
+  const porSlot = (cs: ResolvedCard[]) => new Map(cs.map((c) => [c.slotId, c]));
+  const cards32Map = porSlot(cards32);
+  const cardsOitavasMap = porSlot(cardsOitavas);
+  const cards32Display = ORDEM_DISPLAY_32.map((id) => cards32Map.get(id)!);
+  const cardsOitavasDisplay = ORDEM_DISPLAY_OITAVAS.map((id) => cardsOitavasMap.get(id)!);
   const cardsSemis = SLOTS_SEMIS.map(buildRoundCard);
   const cardTerceiro = buildRoundCard(SLOT_TERCEIRO);
   const cardFinal = buildRoundCard(SLOT_FINAL);
@@ -742,8 +764,7 @@ function SubabaMataMAta({
           {/* Coluna 32 avos */}
           <BracketColumn
             label="32 avos"
-            cards={cards32}
-            slots32={SLOTS_32AVOS}
+            cards={cards32Display}
             isAdmin={isAdmin}
             onAdminClick={(card) => {
               const slot = SLOTS_32AVOS.find((s) => s.slotId === card.slotId) ?? null;
@@ -759,8 +780,7 @@ function SubabaMataMAta({
           {/* Coluna Oitavas */}
           <BracketColumn
             label="Oitavas"
-            cards={cardsOitavas}
-            slots32={null}
+            cards={cardsOitavasDisplay}
             isAdmin={isAdmin}
             onAdminClick={(card) => handleAdminClick(card, null)}
             placares={placares}
@@ -773,7 +793,6 @@ function SubabaMataMAta({
           <BracketColumn
             label="Quartas"
             cards={cardsQuartas}
-            slots32={null}
             isAdmin={isAdmin}
             onAdminClick={(card) => handleAdminClick(card, null)}
             placares={placares}
@@ -786,7 +805,6 @@ function SubabaMataMAta({
           <BracketColumn
             label="Semifinais"
             cards={cardsSemis}
-            slots32={null}
             isAdmin={isAdmin}
             onAdminClick={(card) => handleAdminClick(card, null)}
             placares={placares}
@@ -833,7 +851,6 @@ const CARD_GAP = 8; // gap entre cards na mesma coluna
 function BracketColumn({
   label,
   cards,
-  slots32,
   isAdmin,
   onAdminClick,
   placares,
@@ -842,7 +859,6 @@ function BracketColumn({
 }: {
   label: string;
   cards: ResolvedCard[];
-  slots32: BracketSlot[] | null;
   isAdmin: boolean;
   onAdminClick: (card: ResolvedCard) => void;
   placares: Record<string, PlacarLive>;
@@ -859,18 +875,15 @@ function BracketColumn({
         {label}
       </div>
       <div className="flex flex-col" style={{ gap: `${CARD_GAP + extraGap}px`, paddingTop: `${extraGap / 2}px` }}>
-        {cards.map((card, i) => {
-          const slot = slots32 ? slots32[i] : null;
-          return (
-            <BracketCard
-              key={card.slotId}
-              card={card}
-              isAdmin={isAdmin}
-              onAdminClick={() => onAdminClick(card)}
-              placares={placares}
-            />
-          );
-        })}
+        {cards.map((card) => (
+          <BracketCard
+            key={card.slotId}
+            card={card}
+            isAdmin={isAdmin}
+            onAdminClick={() => onAdminClick(card)}
+            placares={placares}
+          />
+        ))}
       </div>
     </div>
   );
