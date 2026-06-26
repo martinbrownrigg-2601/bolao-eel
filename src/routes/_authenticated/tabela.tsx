@@ -4,6 +4,7 @@ import React from "react";
 import { supabase } from "@/lib/supabase";
 import { Flag } from "@/components/Flag";
 import { Loader2, Plus } from "lucide-react";
+import { TERCEIRO_ALLOC, MANDANTES_TERCEIRO } from "@/lib/terceiros-alloc";
 
 export const Route = createFileRoute("/_authenticated/tabela")({
   head: () => ({
@@ -297,14 +298,17 @@ function calcularClassificacao(
   return resultado;
 }
 
-function calcularMelhoresTerceiros(
+// Ranking dos terceiros colocados (melhor → pior) pelos critérios oficiais da
+// FIFA: (1) pontos, (2) saldo de gols, (3) gols pró, (4) fair play (conduta),
+// (5) ranking FIFA. Mantém o GRUPO de cada um (necessário p/ a tabela do Anexo C).
+function rankearTerceiros(
   classificacao: Record<string, StandingRow[]>,
-): Set<string> {
-  const terceiros: StandingRow[] = [];
-  for (const rows of Object.values(classificacao)) {
-    if (rows.length >= 3) terceiros.push(rows[2]);
+): { grupo: string; row: StandingRow }[] {
+  const terceiros: { grupo: string; row: StandingRow }[] = [];
+  for (const [grupo, rows] of Object.entries(classificacao)) {
+    if (rows.length >= 3) terceiros.push({ grupo, row: rows[2] });
   }
-  terceiros.sort((a, b) => {
+  terceiros.sort(({ row: a }, { row: b }) => {
     if (b.pts !== a.pts) return b.pts - a.pts;
     if (b.sg !== a.sg) return b.sg - a.sg;
     if (b.gp !== a.gp) return b.gp - a.gp;
@@ -318,8 +322,40 @@ function calcularMelhoresTerceiros(
     if (rA != null && rB != null && rA !== rB) return rA - rB;
     return 0;
   });
-  const top8 = new Set(terceiros.slice(0, 8).map((r) => r.selecao.id));
-  return top8;
+  return terceiros;
+}
+
+function calcularMelhoresTerceiros(
+  classificacao: Record<string, StandingRow[]>,
+): Set<string> {
+  return new Set(
+    rankearTerceiros(classificacao).slice(0, 8).map((t) => t.row.selecao.id),
+  );
+}
+
+// Resolve, via a tabela oficial de combinações (Anexo C), qual SELEÇÃO (3º
+// colocado) cada MANDANTE enfrenta nos 32 avos. Retorna mapa: grupo do mandante
+// (ex.: "E" para o jogo 1E×3X) → seleção do terceiro. Vazio quando ainda não há
+// 8 terceiros determináveis ou a combinação não consta na tabela.
+function resolverTerceiros(
+  classificacao: Record<string, StandingRow[]>,
+): Record<string, Selecao> {
+  const ranking = rankearTerceiros(classificacao);
+  if (ranking.length < 8) return {};
+  const classificados = ranking.slice(0, 8);
+  const combo = classificados.map((t) => t.grupo).sort().join("");
+  const alocacao = TERCEIRO_ALLOC[combo];
+  if (!alocacao) return {};
+  // grupo do terceiro → seleção (3º colocado daquele grupo)
+  const selPorGrupo: Record<string, Selecao> = {};
+  for (const { grupo, row } of classificados) selPorGrupo[grupo] = row.selecao;
+  // alocacao[i] = grupo do terceiro que enfrenta o mandante MANDANTES_TERCEIRO[i]
+  const out: Record<string, Selecao> = {};
+  MANDANTES_TERCEIRO.forEach((mandante, i) => {
+    const sel = selPorGrupo[alocacao[i]];
+    if (sel) out[mandante] = sel;
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -726,6 +762,17 @@ function SubabaMataMAta({
     return m;
   }, [mataMata]);
 
+  // Alocação projetada dos 8 melhores terceiros (mapa grupo-do-mandante → seleção).
+  const terceiros = useMemo(() => resolverTerceiros(classificacao), [classificacao]);
+
+  // Resolve uma posição do card. Para "1X"/"2X" usa a classificação do grupo;
+  // para "3X..." usa a tabela oficial do Anexo C — o terceiro é definido pelo
+  // mandante do confronto (a outra posição do card, sempre "1X" nesses slots).
+  function resolverPos(pos: string, posMandante: string): Selecao | null {
+    if (pos.startsWith("3")) return terceiros[posMandante[1]] ?? null;
+    return resolverSlot(pos, classificacao);
+  }
+
   function buildCard(slotId: string, descA: string, descB: string, posA: string, posB: string, fase: string): ResolvedCard {
     const partida = partidasPorSlot.get(slotId) ?? null;
     let selA: Selecao | null = null;
@@ -737,8 +784,8 @@ function SubabaMataMAta({
       // Tentar resolver do bracket de grupos, mas sem reprojetar times que já
       // estão numa partida real desta fase (evita card duplicado).
       const usados = idsEmPartidaReal[fase];
-      selA = resolverSlot(posA, classificacao);
-      selB = resolverSlot(posB, classificacao);
+      selA = resolverPos(posA, posB);
+      selB = resolverPos(posB, posA);
       if (usados?.has(selA?.id ?? "")) selA = null;
       if (usados?.has(selB?.id ?? "")) selB = null;
     }
