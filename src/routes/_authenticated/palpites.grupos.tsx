@@ -114,6 +114,7 @@ type Palpite = {
   gols_mandante: number;
   gols_visitante: number;
   pontos_ganhos: number | null;
+  vencedor_penaltis_id: string | null;
 };
 
 // Placar AO VIVO (referência visual; não afeta pontuação).
@@ -156,7 +157,7 @@ function PalpitesGrupos() {
           const [{ data: pls }, { data: pe }] = await Promise.all([
             supabase
               .from("palpites")
-              .select("partida_id,gols_mandante,gols_visitante,pontos_ganhos")
+              .select("partida_id,gols_mandante,gols_visitante,pontos_ganhos,vencedor_penaltis_id")
               .eq("usuario_id", u.user.id),
             bolaoAtivo
               ? supabase
@@ -337,8 +338,9 @@ function PalpitesGrupos() {
         <h1 className="text-3xl font-bold">Palpites</h1>
         <p className="mt-1 text-muted-foreground">
           Crave o placar. <span className="text-primary font-medium">5 pts</span> pelo resultado +{" "}
-          <span className="text-accent font-medium">2 pts</span> pelo placar exato. Palpites fecham
-          no início de cada jogo.
+          <span className="text-accent font-medium">2 pts</span> pelo placar exato. No mata-mata,{" "}
+          <span className="text-accent font-medium">+2 pts</span> se cravar o empate e acertar quem
+          passa nos pênaltis. Palpites fecham no início de cada jogo.
         </p>
       </header>
 
@@ -967,9 +969,16 @@ function PartidaRow({
   const bloqueado = palpiteFechado(partida);
   const [gm, setGm] = useState<string>(palpite ? String(palpite.gols_mandante) : "");
   const [gv, setGv] = useState<string>(palpite ? String(palpite.gols_visitante) : "");
+  // Mata-mata: quem o usuário acha que passa nos pênaltis (só quando crava empate).
+  const [pen, setPen] = useState<string>(palpite?.vencedor_penaltis_id ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  const ehMataMata = partida.fase !== "grupos";
+  const empate = gm !== "" && gv !== "" && Number(gm) === Number(gv);
+  // Seletor de "quem passa" só aparece em empate de mata-mata.
+  const mostrarPen = ehMataMata && empate;
 
   async function salvar() {
     setErro(null);
@@ -977,6 +986,12 @@ function PartidaRow({
     const nv = parseInt(gv, 10);
     if (Number.isNaN(nm) || Number.isNaN(nv) || nm < 0 || nv < 0) {
       setErro("Informe gols válidos.");
+      return;
+    }
+    // Em empate de mata-mata, apontar quem passa nos pênaltis é obrigatório.
+    const empateMataMata = ehMataMata && nm === nv;
+    if (empateMataMata && !pen) {
+      setErro("Aponte quem passa nos pênaltis.");
       return;
     }
     setSaving(true);
@@ -991,10 +1006,11 @@ function PartidaRow({
             partida_id: partida.id,
             gols_mandante: nm,
             gols_visitante: nv,
+            vencedor_penaltis_id: empateMataMata ? pen : null,
           },
           { onConflict: "usuario_id,partida_id" },
         )
-        .select("partida_id,gols_mandante,gols_visitante,pontos_ganhos")
+        .select("partida_id,gols_mandante,gols_visitante,pontos_ganhos,vencedor_penaltis_id")
         .single();
       if (error) throw error;
       onSaved(data as Palpite);
@@ -1091,6 +1107,55 @@ function PartidaRow({
             <span className="truncate font-medium">{visitante?.nome ?? "—"}</span>
           </div>
         </div>
+        {mostrarPen && (
+          <div className="mt-2 rounded-md border border-border/60 bg-secondary/20 px-3 py-2">
+            <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+              Empate no tempo regulamentar + prorrogação — quem passa nos pênaltis?{" "}
+              <span className="font-semibold text-accent">(+2 se acertar)</span>
+            </div>
+            {bloqueado ? (
+              <div className="flex items-center gap-1.5 text-sm">
+                {pen ? (
+                  <>
+                    <Flag
+                      codigo={pen === mandante?.id ? mandante?.codigo : visitante?.codigo}
+                      bandeira={pen === mandante?.id ? mandante?.bandeira : visitante?.bandeira}
+                      size={14}
+                      className="shrink-0"
+                    />
+                    <span className="truncate">
+                      {pen === mandante?.id ? mandante?.nome : visitante?.nome}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">— não apontado —</span>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                {[mandante, visitante].map(
+                  (t) =>
+                    t && (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setPen(t.id)}
+                        disabled={saving}
+                        className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs transition-colors disabled:opacity-50 ${
+                          pen === t.id
+                            ? "border-primary bg-primary/10 font-semibold"
+                            : "border-border hover:bg-secondary/50"
+                        }`}
+                      >
+                        <Flag codigo={t.codigo} bandeira={t.bandeira} size={14} className="shrink-0" />
+                        <span className="truncate">{t.nome}</span>
+                      </button>
+                    ),
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             {bloqueado ? (

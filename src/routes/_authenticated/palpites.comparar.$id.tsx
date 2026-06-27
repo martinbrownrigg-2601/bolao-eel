@@ -30,6 +30,7 @@ type PalpiteOutro = {
   gols_mandante: number;
   gols_visitante: number;
   pontos_ganhos: number | null;
+  vencedor_penaltis_id: string | null;
 };
 // Placar AO VIVO (referência visual; não afeta pontuação).
 type PlacarLive = {
@@ -77,7 +78,7 @@ function CompararPalpites() {
         if (part && !aindaAberta(part as Partida)) {
           let query = supabase
             .from("palpites")
-            .select("usuario_id,gols_mandante,gols_visitante,pontos_ganhos")
+            .select("usuario_id,gols_mandante,gols_visitante,pontos_ganhos,vencedor_penaltis_id")
             .eq("partida_id", id);
 
           // Filtrar pelos membros do bolão ativo
@@ -255,6 +256,13 @@ function CompararPalpites() {
               partida.gols_visitante != null &&
               p.gols_mandante === partida.gols_mandante &&
               p.gols_visitante === partida.gols_visitante;
+            // Mata-mata: quem o jogador apontou para passar nos pênaltis.
+            const penSel =
+              partida.fase !== "grupos" &&
+              p.gols_mandante === p.gols_visitante &&
+              p.vencedor_penaltis_id
+                ? selecoes[p.vencedor_penaltis_id]
+                : null;
             return (
               <li
                 key={p.usuario_id}
@@ -276,6 +284,20 @@ function CompararPalpites() {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
+                  {penSel && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                      title="Apontou para passar nos pênaltis"
+                    >
+                      <Flag
+                        codigo={penSel.codigo}
+                        bandeira={penSel.bandeira}
+                        size={12}
+                        className="shrink-0"
+                      />
+                      passa
+                    </span>
+                  )}
                   <span className="text-lg font-bold tabular-nums">
                     {p.gols_mandante} × {p.gols_visitante}
                   </span>
